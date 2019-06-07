@@ -54,7 +54,7 @@ func partialStringNameToCode(partialStringName string) uint64 {
 	return result
 }
 
-// Code -> String in uint64
+// uint64 Code -> String
 func partialCodeToString(partialName uint64) (string, error) {
 	// Error == ^uint64(0)
 	if partialName == ^uint64(0) {
