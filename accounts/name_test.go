@@ -55,6 +55,11 @@ func TestMapKeyAsStrct(t *testing.T) {
 
 	assert.EqualValues(t, customMap[testName1], "Hello")
 	assert.EqualValues(t, customMap[testName2], "World")
+
+	// NewName feasibility test
+	assert.EqualValues(t, customMap[NewName("psy2848048")], "World")
+	_, ok := customMap[NewName("psy2848048000")]
+	assert.EqualValues(t, ok, false)
 }
 
 func TestEncodingRestrictedChar(t *testing.T) {

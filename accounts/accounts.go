@@ -1,55 +1,104 @@
 package accounts
 
 import (
-	"io/ioutil"
+	"errors"
+	"fmt"
 
-	amino "github.com/tendermint/go-amino"
 	"github.com/tendermint/tendermint/crypto"
-	"github.com/tendermint/tendermint/crypto/ed25519"
 )
-
-var cdc = amino.NewCodec()
 
 // AccountInfo struct for supporting readable ID
 type AccountInfo struct {
 	PubKey crypto.PubKey
+	// To be more appendded..
 }
 
-// Account serves N ame - Info service
-var Account = make(map[Name]AccountInfo)
+// AccountMap type
+type AccountMap map[Name]*AccountInfo
 
-// KeyPair struct works for generating [Public key : Private key] pair for account
-// It, especially private key only works for JSON marshalling on file flushing.
-// Private key does not use in DB store
-type KeyPair struct {
-	PrivKey crypto.PrivKey
-	PubKey  crypto.PubKey
+// Account serves [Name - Info] service
+// Object 'Account' treats as a GLOBAL VARIABLE, external service may use this object
+var Account = make(AccountMap)
+
+// CheckExistingAccount checks the given string name already exists or not
+func (ac *AccountMap) CheckExistingAccount(stringName string) bool {
+	_, ok := (*ac)[NewName(stringName)]
+	return ok
 }
 
-func genKeyCandidate(isOnFile bool, filePath string) (*KeyPair, error) {
-	privKey := ed25519.GenPrivKey()
+// NewAccount shows the step of ID registration
+//    stringName string: Readable ID
+//	  privKey crypto.PrivkKey: Matching private key
+// Need to test: ac copied as a pointer or whole map object
+func (ac *AccountMap) NewAccount(stringName string, privKey crypto.PrivKey) (*AccountInfo, error) {
+	isDup := ac.CheckExistingAccount(stringName)
+	if isDup == true {
+		return nil, errors.New("Given ID already exists")
+	}
+
+	name := NewName(stringName)
 	pubKey := privKey.PubKey()
-
-	keyPair := &KeyPair{
-		PrivKey: privKey,
-		PubKey:  pubKey,
+	accountObj := &AccountInfo{
+		PubKey: pubKey,
 	}
+	(*ac)[name] = accountObj
+	fmt.Printf("Account '%s' has been created successfully with the following public key:\n", stringName)
+	fmt.Println(accountObj.PubKey)
 
-	if isOnFile == true {
-		jsonBytes, err := cdc.MarshalJSON(keyPair)
-		if err != nil {
-			return nil, err
-		}
-		err = ioutil.WriteFile(filePath, jsonBytes, 0600)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return keyPair, nil
+	return accountObj, nil
 }
 
-// GenKeyCandidateByObject returns randomly-generated KeyPair object
-func GenKeyCandidateByObject() (*KeyPair, error) {
-	keyPair, err := genKeyCandidate(false, "")
-	return keyPair, err
+func (ac *AccountMap) keyCheck(stringName string, givenPrivKey crypto.PrivKey) (bool, error) {
+	isExists := ac.CheckExistingAccount(stringName)
+	if isExists == false {
+		return false, errors.New("Account doesn't exist")
+	}
+
+	if currPubKey := (*ac)[NewName(stringName)]; currPubKey.PubKey == givenPrivKey.PubKey() {
+		return true, nil
+	}
+	return false, errors.New("Key doesn't match")
+}
+
+// KeyCheck can be used as LogIn function
+func (ac *AccountMap) KeyCheck(stringName string, givenPrivKey crypto.PrivKey) (bool, error) {
+	return ac.keyCheck(stringName, givenPrivKey)
+}
+
+// KeyChange supports key change of account
+func (ac *AccountMap) KeyChange(stringName string, oldPrivKey, newPrivKey crypto.PrivKey) (bool, error) {
+	isMatched, err := ac.keyCheck(stringName, oldPrivKey)
+	if isMatched == false {
+		return false, err
+	}
+
+	newPubKey := newPrivKey.PubKey()
+	(*ac)[NewName(stringName)].PubKey = newPubKey
+	fmt.Printf("Key of account '%s' has been changed successfully with the following public key:\n", stringName)
+	fmt.Println(newPubKey)
+
+	return true, nil
+}
+
+func (ac *AccountMap) getPublicKey(stringName string) (crypto.PubKey, error) {
+	isExists := ac.CheckExistingAccount(stringName)
+	if isExists == false {
+		return nil, errors.New("Account doesn't exist")
+	}
+
+	return (*ac)[NewName(stringName)].PubKey, nil
+}
+
+// GetPublicKey returns public key using string Name
+func (ac *AccountMap) GetPublicKey(stringName string) (crypto.PubKey, error) {
+	return ac.getPublicKey(stringName)
+}
+
+// GetAddress returns address using string Name
+func (ac *AccountMap) GetAddress(stringName string) (crypto.Address, error) {
+	pubKey, err := ac.getPublicKey(stringName)
+	if err != nil {
+		return nil, err
+	}
+	return pubKey.Address(), nil
 }
