@@ -9,7 +9,7 @@ import (
 
 var Account = make(AccountMap)
 
-func registerAccount(stringName string) (*AccountInfo, error) {
+func registerAccount(stringName string) (*UnitAccount, error) {
 	keyPair, err1 := GenKeyCandidateByObject()
 	if err1 != nil {
 		return nil, err1

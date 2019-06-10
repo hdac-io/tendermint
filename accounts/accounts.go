@@ -21,6 +21,7 @@ Impl:
 
 // AccountInfo struct for supporting readable ID
 type AccountInfo struct {
+	ID     Name
 	PubKey crypto.PubKey
 	// To be more appendded..
 }

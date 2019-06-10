@@ -4,14 +4,12 @@ import (
 	"fmt"
 
 	dbm "github.com/tendermint/tendermint/libs/db"
-	"github.com/tendermint/tendermint/types"
 )
 
 /*
 Requirements:
 	- Valid new account must be persisted immediately and never forgotten
 	- Uncommitted account must be continuously broadcast
-	// (need to check) - Uncommitted account has a partial order, the account's priority
 
 Impl:
 	- First commit atomically in outqueue, pending, lookup.
@@ -20,82 +18,67 @@ Impl:
 
 Schema for indexing account (note you need both height and hash to find a piece of account):
 
-"account-lookup"/<account-height>/<account-hash> -> AccountInfo
-"account-outqueue"/<priority>/<account-height>/<account-hash> -> AccountInfo
-"account-pending"/<account-height>/<account-hash> -> AccountInfo
+"account-lookup"/<string account> -> AccountInfo
+"account-outqueue"/<string account> -> AccountInfo
+"account-pending"/<string account> -> AccountInfo
 */
 
-type EvidenceInfo struct {
+// AccountInfo contains commit & broadcast priority
+type AccountInfo struct {
 	Committed bool
-	Priority  int64
-	Evidence  types.Evidence
+	// More to be added if needed
+	UnitAccount UnitAccount
 }
+
+// Account is a GLOBAL VARIABLE for handling readabale account service
+//var Account = make(AccountMap)
 
 const (
-	baseKeyLookup   = "evidence-lookup"   // all evidence
-	baseKeyOutqueue = "evidence-outqueue" // not-yet broadcast
-	baseKeyPending  = "evidence-pending"  // broadcast but not committed
+	baseKeyLookup   = "account-lookup"   // all account
+	baseKeyOutqueue = "account-outqueue" // not-yet broadcasted account
+	baseKeyPending  = "account-pending"  // broadcasted but not committed
 )
 
-func keyLookup(evidence types.Evidence) []byte {
-	return keyLookupFromHeightAndHash(evidence.Height(), evidence.Hash())
+func keyLookup(stringName string) []byte {
+	return _key("%s/%s", baseKeyLookup, stringName)
 }
 
-// big endian padded hex
-func bE(h int64) string {
-	return fmt.Sprintf("%0.16X", h)
+func keyOutqueue(stringName string) []byte {
+	return _key("%s/%s", baseKeyOutqueue, stringName)
 }
 
-func keyLookupFromHeightAndHash(height int64, hash []byte) []byte {
-	return _key("%s/%s/%X", baseKeyLookup, bE(height), hash)
+func keyPending(stringName string) []byte {
+	return _key("%s/%s", baseKeyPending, stringName)
 }
 
-func keyOutqueue(evidence types.Evidence, priority int64) []byte {
-	return _key("%s/%s/%s/%X", baseKeyOutqueue, bE(priority), bE(evidence.Height()), evidence.Hash())
+func _key(fmtString string, o ...interface{}) []byte {
+	return []byte(fmt.Sprintf(fmtString, o...))
 }
 
-func keyPending(evidence types.Evidence) []byte {
-	return _key("%s/%s/%X", baseKeyPending, bE(evidence.Height()), evidence.Hash())
-}
-
-func _key(fmt_ string, o ...interface{}) []byte {
-	return []byte(fmt.Sprintf(fmt_, o...))
-}
-
-// EvidenceStore is a store of all the evidence we've seen, including
-// evidence that has been committed, evidence that has been verified but not broadcast,
-// and evidence that has been broadcast but not yet committed.
-type EvidenceStore struct {
+// AccountStore is a store of all the account we've seen, including
+// accounts that has been committed, evidence that has been verified but not broadcast,
+// and accounts that has been broadcast but not yet committed.
+type AccountStore struct {
 	db dbm.DB
 }
 
-func NewEvidenceStore(db dbm.DB) *EvidenceStore {
-	return &EvidenceStore{
+// NewAccountStore returns AccountStore DB object
+func NewAccountStore(db dbm.DB) *AccountStore {
+	return &AccountStore{
 		db: db,
 	}
 }
 
-// PriorityEvidence returns the evidence from the outqueue, sorted by highest priority.
-func (store *EvidenceStore) PriorityEvidence() (evidence []types.Evidence) {
-	// reverse the order so highest priority is first
-	l := store.listEvidence(baseKeyOutqueue, -1)
-	for i, j := 0, len(l)-1; i < j; i, j = i+1, j-1 {
-		l[i], l[j] = l[j], l[i]
-	}
-
-	return l
+// PendingAccount returns up to maxNum known, uncommitted accounts.
+// If maxNum is -1, all accounts are returned.
+func (store *AccountStore) PendingAccount(maxNum int64) (accounts []UnitAccount) {
+	return store.listAccounts(baseKeyPending, maxNum)
 }
 
-// PendingEvidence returns up to maxNum known, uncommitted evidence.
-// If maxNum is -1, all evidence is returned.
-func (store *EvidenceStore) PendingEvidence(maxNum int64) (evidence []types.Evidence) {
-	return store.listEvidence(baseKeyPending, maxNum)
-}
-
-// listEvidence lists up to maxNum pieces of evidence for the given prefix key.
-// It is wrapped by PriorityEvidence and PendingEvidence for convenience.
-// If maxNum is -1, there's no cap on the size of returned evidence.
-func (store *EvidenceStore) listEvidence(prefixKey string, maxNum int64) (evidence []types.Evidence) {
+// listAccounts lists up to maxNum pieces of account for the given prefix key.
+// It is wrapped by PendingAccount for convenience.
+// If maxNum is -1, there's no cap on the size of returned accounts.
+func (store *AccountStore) listAccounts(prefixKey string, maxNum int64) (accounts []UnitAccount) {
 	var count int64
 	iter := dbm.IteratePrefix(store.db, []byte(prefixKey))
 	defer iter.Close()
@@ -103,101 +86,106 @@ func (store *EvidenceStore) listEvidence(prefixKey string, maxNum int64) (eviden
 		val := iter.Value()
 
 		if count == maxNum {
-			return evidence
+			return accounts
 		}
 		count++
 
-		var ei EvidenceInfo
-		err := cdc.UnmarshalBinaryBare(val, &ei)
+		var acc AccountInfo
+		err := cdc.UnmarshalBinaryBare(val, &acc)
 		if err != nil {
 			panic(err)
 		}
-		evidence = append(evidence, ei.Evidence)
+		accounts = append(accounts, acc.UnitAccount)
 	}
-	return evidence
+	return accounts
 }
 
-// GetEvidenceInfo fetches the EvidenceInfo with the given height and hash.
-// If not found, ei.Evidence is nil.
-func (store *EvidenceStore) GetEvidenceInfo(height int64, hash []byte) EvidenceInfo {
-	key := keyLookupFromHeightAndHash(height, hash)
+// GetAccountInfo fetches the AccountInfo with the given unit account data
+// If not found, acc.UnitAccount is nil.
+func (store *AccountStore) GetAccountInfo(unitAccount UnitAccount) AccountInfo {
+	stringName, _ := unitAccount.ID.ToString()
+	key := keyLookup(stringName)
 	val := store.db.Get(key)
 
 	if len(val) == 0 {
-		return EvidenceInfo{}
+		return AccountInfo{}
 	}
-	var ei EvidenceInfo
-	err := cdc.UnmarshalBinaryBare(val, &ei)
+	var acc AccountInfo
+	err := cdc.UnmarshalBinaryBare(val, &acc)
 	if err != nil {
 		panic(err)
 	}
-	return ei
+	return acc
 }
 
-// AddNewEvidence adds the given evidence to the database.
-// It returns false if the evidence is already stored.
-func (store *EvidenceStore) AddNewEvidence(evidence types.Evidence, priority int64) bool {
+// AddNewAccount adds the given unit account to the database.
+// It returns false if the account is already stored.
+func (store *AccountStore) AddNewAccount(unitAccount UnitAccount) bool {
 	// check if we already have seen it
-	ei := store.getEvidenceInfo(evidence)
-	if ei.Evidence != nil {
+	acc := store.getAccountInfo(unitAccount)
+	if acc.UnitAccount != (UnitAccount{}) {
 		return false
 	}
 
-	ei = EvidenceInfo{
-		Committed: false,
-		Priority:  priority,
-		Evidence:  evidence,
+	acc = AccountInfo{
+		Committed:   false,
+		UnitAccount: unitAccount,
 	}
-	eiBytes := cdc.MustMarshalBinaryBare(ei)
+	accBytes, err := cdc.MarshalBinaryBare(acc)
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
 
 	// add it to the store
-	key := keyOutqueue(evidence, priority)
-	store.db.Set(key, eiBytes)
+	strName, _ := unitAccount.ID.ToString()
+	key := keyOutqueue(strName)
+	store.db.Set(key, accBytes)
 
-	key = keyPending(evidence)
-	store.db.Set(key, eiBytes)
+	key = keyPending(strName)
+	store.db.Set(key, accBytes)
 
-	key = keyLookup(evidence)
-	store.db.SetSync(key, eiBytes)
+	key = keyLookup(strName)
+	store.db.SetSync(key, accBytes)
 
 	return true
 }
 
-// MarkEvidenceAsBroadcasted removes evidence from Outqueue.
-func (store *EvidenceStore) MarkEvidenceAsBroadcasted(evidence types.Evidence) {
-	ei := store.getEvidenceInfo(evidence)
-	if ei.Evidence == nil {
-		// nothing to do; we did not store the evidence yet (AddNewEvidence):
+// MarkAccountAsBroadcasted removes account from Outqueue.
+func (store *AccountStore) MarkAccountAsBroadcasted(unitAccount UnitAccount) {
+	acc := store.getAccountInfo(unitAccount)
+	if acc.UnitAccount == (UnitAccount{}) {
+		// nothing to do; we did not store the account yet (AddNewAccount):
 		return
 	}
 	// remove from the outqueue
-	key := keyOutqueue(evidence, ei.Priority)
+	strName, _ := unitAccount.ID.ToString()
+	key := keyOutqueue(strName)
 	store.db.Delete(key)
 }
 
-// MarkEvidenceAsCommitted removes evidence from pending and outqueue and sets the state to committed.
-func (store *EvidenceStore) MarkEvidenceAsCommitted(evidence types.Evidence) {
+// MarkAccountAsCommitted removes account from pending and outqueue and sets the state to committed.
+func (store *AccountStore) MarkAccountAsCommitted(unitAccount UnitAccount) {
 	// if its committed, its been broadcast
-	store.MarkEvidenceAsBroadcasted(evidence)
+	store.MarkAccountAsBroadcasted(unitAccount)
 
-	pendingKey := keyPending(evidence)
+	strName, _ := unitAccount.ID.ToString()
+	pendingKey := keyPending(strName)
 	store.db.Delete(pendingKey)
 
-	// committed EvidenceInfo doens't need priority
-	ei := EvidenceInfo{
-		Committed: true,
-		Evidence:  evidence,
-		Priority:  0,
+	acc := AccountInfo{
+		Committed:   true,
+		UnitAccount: unitAccount,
 	}
 
-	lookupKey := keyLookup(evidence)
-	store.db.SetSync(lookupKey, cdc.MustMarshalBinaryBare(ei))
+	lookupKey := keyLookup(strName)
+	store.db.SetSync(lookupKey, cdc.MustMarshalBinaryBare(acc))
 }
 
 //---------------------------------------------------
 // utils
 
-// getEvidenceInfo is convenience for calling GetEvidenceInfo if we have the full evidence.
-func (store *EvidenceStore) getEvidenceInfo(evidence types.Evidence) EvidenceInfo {
-	return store.GetEvidenceInfo(evidence.Height(), evidence.Hash())
+// getAccountInfo is convenience for calling GetAccountInfo if we have the full unit account data.
+func (store *AccountStore) getAccountInfo(unitAccount UnitAccount) AccountInfo {
+	return store.GetAccountInfo(unitAccount)
 }
