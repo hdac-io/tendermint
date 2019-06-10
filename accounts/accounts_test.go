@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var Account = make(AccountMap)
+
 func registerAccount(stringName string) (*AccountInfo, error) {
 	keyPair, err1 := GenKeyCandidateByObject()
 	if err1 != nil {

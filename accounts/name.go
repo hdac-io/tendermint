@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+// Might be relocated into 'types'
+
 const charmap string = "0123456789abcdefghijhlmnopqrstuvwxyz-._"
 const encodingBase int = len(charmap)
 

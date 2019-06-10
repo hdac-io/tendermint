@@ -7,6 +7,18 @@ import (
 	"github.com/tendermint/tendermint/crypto"
 )
 
+/*
+Requirements:
+	- Provide account service with readable ID
+
+Impl:
+	- [Readable ID : Public key] matching logic
+	- Key checking logic for account login
+	- Key change logic
+	- Duplicate readable ID check
+
+*/
+
 // AccountInfo struct for supporting readable ID
 type AccountInfo struct {
 	PubKey crypto.PubKey
@@ -15,10 +27,6 @@ type AccountInfo struct {
 
 // AccountMap type
 type AccountMap map[Name]*AccountInfo
-
-// Account serves [Name - Info] service
-// Object 'Account' treats as a GLOBAL VARIABLE, external service may use this object
-var Account = make(AccountMap)
 
 // CheckExistingAccount checks the given string name already exists or not
 func (ac *AccountMap) CheckExistingAccount(stringName string) bool {
