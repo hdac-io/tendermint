@@ -3,6 +3,7 @@ package accounts
 import (
 	"fmt"
 
+	"github.com/tendermint/go-amino"
 	dbm "github.com/tendermint/tendermint/libs/db"
 )
 
@@ -28,6 +29,11 @@ type AccountInfo struct {
 	Committed bool
 	// More to be added if needed
 	UnitAccount UnitAccount
+}
+
+// RegisterAccountInfo registers to amino codec to byte digest
+func RegisterAccountInfo(cd *amino.Codec) {
+	cd.RegisterConcrete(&AccountInfo{}, "tendermint/accounts/AccountInfo", nil)
 }
 
 // Account is a GLOBAL VARIABLE for handling readabale account service
@@ -131,11 +137,7 @@ func (store *AccountStore) AddNewAccount(unitAccount UnitAccount) bool {
 		Committed:   false,
 		UnitAccount: unitAccount,
 	}
-	accBytes, err := cdc.MarshalBinaryBare(acc)
-	if err != nil {
-		fmt.Println(err)
-		return false
-	}
+	accBytes := cdc.MustMarshalBinaryBare(acc)
 
 	// add it to the store
 	strName, _ := unitAccount.ID.ToString()

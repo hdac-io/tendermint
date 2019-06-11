@@ -19,15 +19,15 @@ Impl:
 
 */
 
-// AccountInfo struct for supporting readable ID
-type AccountInfo struct {
+// UnitAccount struct for supporting readable ID
+type UnitAccount struct {
 	ID     Name
 	PubKey crypto.PubKey
 	// To be more appendded..
 }
 
 // AccountMap type
-type AccountMap map[Name]*AccountInfo
+type AccountMap map[Name]*UnitAccount
 
 // CheckExistingAccount checks the given string name already exists or not
 func (ac *AccountMap) CheckExistingAccount(stringName string) bool {
@@ -39,7 +39,7 @@ func (ac *AccountMap) CheckExistingAccount(stringName string) bool {
 //    stringName string: Readable ID
 //	  privKey crypto.PrivkKey: Matching private key
 // Need to test: ac copied as a pointer or whole map object
-func (ac *AccountMap) NewAccount(stringName string, privKey crypto.PrivKey) (*AccountInfo, error) {
+func (ac *AccountMap) NewAccount(stringName string, privKey crypto.PrivKey) (*UnitAccount, error) {
 	isDup := ac.CheckExistingAccount(stringName)
 	if isDup == true {
 		return nil, errors.New("Given ID already exists")
@@ -47,7 +47,7 @@ func (ac *AccountMap) NewAccount(stringName string, privKey crypto.PrivKey) (*Ac
 
 	name := NewName(stringName)
 	pubKey := privKey.PubKey()
-	accountObj := &AccountInfo{
+	accountObj := &UnitAccount{
 		PubKey: pubKey,
 	}
 	(*ac)[name] = accountObj

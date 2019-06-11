@@ -8,14 +8,17 @@ import (
 	"github.com/tendermint/tendermint/crypto/ed25519"
 )
 
-var cdc = amino.NewCodec()
-
 // KeyPair struct works for generating [Public key : Private key] pair for account
 // It, especially private key only works for JSON marshalling on file flushing.
 // Private key does not use in DB store
 type KeyPair struct {
 	PrivKey crypto.PrivKey
 	PubKey  crypto.PubKey
+}
+
+// RegisterKeyPair registers KeyPair type
+func RegisterKeyPair(cd *amino.Codec) {
+	cd.RegisterConcrete(&KeyPair{}, "tendermint/accounts/KeyPair", nil)
 }
 
 func genKeyCandidate(isOnFile bool, filePath string) (*KeyPair, error) {
