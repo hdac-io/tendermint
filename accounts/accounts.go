@@ -104,6 +104,21 @@ func (ac *AccountMap) KeyChange(stringName string, oldPrivKey, newPrivKey crypto
 	return true, nil
 }
 
+// KeyChangeForBlockSync supports key change of account
+func (ac *AccountMap) KeyChangeForBlockSync(oldAccout, newAccount UnitAccount) (bool, error) {
+	oldPubKey := (*ac)[oldAccout.ID].PubKey
+	if isMatched == false {
+		return false, err
+	}
+
+	newPubKey := newPrivKey.PubKey()
+	(*ac)[NewName(stringName)].PubKey = newPubKey
+	fmt.Printf("Key of account '%s' has been changed successfully with the following public key:\n", stringName)
+	fmt.Println(newPubKey)
+
+	return true, nil
+}
+
 func (ac *AccountMap) getPublicKey(stringName string) (crypto.PubKey, error) {
 	isExists := ac.CheckExistingAccount(stringName)
 	if isExists == false {

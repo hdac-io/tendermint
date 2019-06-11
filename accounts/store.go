@@ -153,6 +153,30 @@ func (store *AccountStore) AddNewAccount(unitAccount UnitAccount) bool {
 	return true
 }
 
+// ChangeKey updates public key of the account and apply to the database
+func (store *AccountStore) ChangeKey(oldAccount, newAccount UnitAccount) bool {
+	// check if we already have seen it
+	acc := store.getAccountInfo(oldAccount)
+	if acc.UnitAccount != (UnitAccount{}) {
+		return false
+	}
+
+	accBytes := cdc.MustMarshalBinaryBare(newAccount)
+
+	// add it to the store
+	strName, _ := newAccount.ID.ToString()
+	key := keyOutqueue(strName)
+	store.db.Set(key, accBytes)
+
+	key = keyPending(strName)
+	store.db.Set(key, accBytes)
+
+	key = keyLookup(strName)
+	store.db.SetSync(key, accBytes)
+
+	return true
+}
+
 // MarkAccountAsBroadcasted removes account from Outqueue.
 func (store *AccountStore) MarkAccountAsBroadcasted(unitAccount UnitAccount) {
 	acc := store.getAccountInfo(unitAccount)
