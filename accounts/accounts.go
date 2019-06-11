@@ -57,6 +57,21 @@ func (ac *AccountMap) NewAccount(stringName string, privKey crypto.PrivKey) (*Un
 	return accountObj, nil
 }
 
+// NewAccountForBlockSync is needed for synching by block
+func (ac *AccountMap) NewAccountForBlockSync(unitAccount UnitAccount) (*UnitAccount, error) {
+	stringName, _ := unitAccount.ID.ToString()
+	isDup := ac.CheckExistingAccount(stringName)
+	if isDup == true {
+		return nil, errors.New("Given ID already exists")
+	}
+
+	(*ac)[unitAccount.ID] = &unitAccount
+	fmt.Printf("Account '%s' has been created successfully with the following public key:\n", stringName)
+	fmt.Println(unitAccount.PubKey)
+
+	return &unitAccount, nil
+}
+
 func (ac *AccountMap) keyCheck(stringName string, givenPrivKey crypto.PrivKey) (bool, error) {
 	isExists := ac.CheckExistingAccount(stringName)
 	if isExists == false {
