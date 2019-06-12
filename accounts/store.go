@@ -157,7 +157,7 @@ func (store *AccountStore) AddNewAccount(unitAccount UnitAccount) bool {
 func (store *AccountStore) ChangeKey(oldAccount, newAccount UnitAccount) bool {
 	// check if we already have seen it
 	acc := store.getAccountInfo(oldAccount)
-	if acc.UnitAccount != (UnitAccount{}) {
+	if acc.UnitAccount != oldAccount {
 		return false
 	}
 

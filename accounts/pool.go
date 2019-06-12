@@ -117,6 +117,33 @@ func (accpool *AccountPool) AddAccount(unitAccount UnitAccount) (err error) {
 	return nil
 }
 
+func (accpool *AccountPool) KeyChange(oldAccount, newAccount UnitAccount) (err error) {
+	// Not yet verifiable
+	// Once block data structure is fixed and then can develop it.
+	/*
+		if err := sm.VerifyEvidence(evpool.stateDB, evpool.State(), evidence); err != nil {
+			return err
+		}
+
+		valset, _ := sm.LoadValidators(accpool.stateDB, accpool.Height())
+		_, val := valset.GetByAddress(evidence.Address())
+		priority := val.VotingPower
+	*/
+
+	changed := accpool.accountStore.ChangeKey(oldAccount, newAccount)
+	if !changed {
+		return
+	}
+
+	accpool.logger.Info("Verified account key change of byzantine behaviour", "account", newAccount)
+
+	// Add account to account list
+	accpool.accountList.KeyChangeForBlockSync(oldAccount, newAccount)
+
+	return nil
+
+}
+
 // MarkAccountAsCommitted marks all the evidence as committed and removes it from the queue.
 func (accpool *AccountPool) MarkAccountAsCommitted(accounts []UnitAccount) {
 	for _, acc := range accounts {
