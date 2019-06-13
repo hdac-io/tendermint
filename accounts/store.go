@@ -116,6 +116,7 @@ func (store *AccountStore) GetAccountInfo(unitAccount UnitAccount) AccountInfo {
 	if len(val) == 0 {
 		return AccountInfo{}
 	}
+
 	var acc AccountInfo
 	err := cdc.UnmarshalBinaryBare(val, &acc)
 	if err != nil {
@@ -161,7 +162,11 @@ func (store *AccountStore) ChangeKey(oldAccount, newAccount UnitAccount) bool {
 		return false
 	}
 
-	accBytes := cdc.MustMarshalBinaryBare(newAccount)
+	acc = AccountInfo{
+		Committed:   false,
+		UnitAccount: newAccount,
+	}
+	accBytes := cdc.MustMarshalBinaryBare(acc)
 
 	// add it to the store
 	strName, _ := newAccount.ID.ToString()
@@ -172,6 +177,7 @@ func (store *AccountStore) ChangeKey(oldAccount, newAccount UnitAccount) bool {
 	store.db.Set(key, accBytes)
 
 	key = keyLookup(strName)
+	store.db.Delete(key)
 	store.db.SetSync(key, accBytes)
 
 	return true

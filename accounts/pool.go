@@ -117,6 +117,7 @@ func (accpool *AccountPool) AddAccount(unitAccount UnitAccount) (err error) {
 	return nil
 }
 
+// KeyChange changes the public key of the given account
 func (accpool *AccountPool) KeyChange(oldAccount, newAccount UnitAccount) (err error) {
 	// Not yet verifiable
 	// Once block data structure is fixed and then can develop it.
@@ -144,10 +145,17 @@ func (accpool *AccountPool) KeyChange(oldAccount, newAccount UnitAccount) (err e
 
 }
 
-// MarkAccountAsCommitted marks all the evidence as committed and removes it from the queue.
+// MarkAccountAsCommitted marks all the account as committed and removes it from the queue.
 func (accpool *AccountPool) MarkAccountAsCommitted(accounts []UnitAccount) {
 	for _, acc := range accounts {
 		accpool.accountStore.MarkAccountAsCommitted(acc)
+	}
+}
+
+// MarkAccountAsBroadcasted marks all the account as committed and removes it from the queue.
+func (accpool *AccountPool) MarkAccountAsBroadcasted(accounts []UnitAccount) {
+	for _, acc := range accounts {
+		accpool.accountStore.MarkAccountAsBroadcasted(acc)
 	}
 }
 

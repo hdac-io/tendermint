@@ -1,6 +1,7 @@
 package accounts
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -117,6 +118,7 @@ func TestAccountPoolIsCommitted(t *testing.T) {
 	assert.True(t, pool.IsCommitted(acc))
 	assert.True(t, pool.accountList.CheckExistingAccount("bryanrhee"))
 }
+
 func TestAccountPoolKeyChange(t *testing.T) {
 	// Initialization:
 	valAddr := []byte("validator_address")
@@ -132,6 +134,7 @@ func TestAccountPoolKeyChange(t *testing.T) {
 		PubKey: keyPair.PubKey,
 	}
 	pool.AddAccount(acc)
+	pool.MarkAccountAsBroadcasted([]UnitAccount{acc})
 	pool.MarkAccountAsCommitted([]UnitAccount{acc})
 
 	// Try to key change
@@ -141,7 +144,11 @@ func TestAccountPoolKeyChange(t *testing.T) {
 		PubKey: anotherKeyPair.PubKey,
 	}
 	pool.KeyChange(acc, newKeyAcc)
+	fmt.Println("Here")
+	pool.MarkAccountAsBroadcasted([]UnitAccount{newKeyAcc})
+	fmt.Println("Here2")
 	pool.MarkAccountAsCommitted([]UnitAccount{newKeyAcc})
+	fmt.Println("Here3")
 
 	pubkeyInAccPool, _ := pool.accountList.GetPublicKey("psy2848048")
 	assert.EqualValues(t, newKeyAcc.PubKey, pubkeyInAccPool)
