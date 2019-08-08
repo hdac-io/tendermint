@@ -251,6 +251,11 @@ func (pv *FilePV) SignProposal(chainID string, proposal *types.Proposal) error {
 	return nil
 }
 
+// EvaluateVrf implements PrivValidator.
+func (pv *FilePV) EvaluateVrf(blockHash []byte) ([32]byte, []byte) {
+	return pv.Key.PrivKey.GetVrfSigner().Evaluate(blockHash[:])
+}
+
 // Save persists the FilePV to disk.
 func (pv *FilePV) Save() {
 	pv.Key.Save()

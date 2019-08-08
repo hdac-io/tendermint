@@ -8,6 +8,7 @@ import (
 	"github.com/hdac-io/tendermint/crypto"
 	"github.com/hdac-io/tendermint/crypto/tmhash"
 	herumi "github.com/hdac-io/bls-go-binary/bls"
+	"github.com/hdac-io/tendermint/crypto/vrf"
 )
 
 var (
@@ -80,6 +81,10 @@ func (privKey PrivKeyBls) Evaluate(m []byte) (index [32]byte, proof []byte) {
 	return beta, pi
 }
 
+func (privKey PrivKeyBls) GetVrfSigner() vrf.PrivateKey {
+	return privKey
+}
+
 // MarshalAmino implement raw deep copy without json tag based default encode
 // it's useful shorter length more than default encode
 func (pubKey PubKeyBls) MarshalAmino() (string, error) {
@@ -131,4 +136,8 @@ func (pubKey PubKeyBls) ProofToHash(m, proof []byte) (index [32]byte, err error)
 	}
 
 	return sha256.Sum256(proof), nil
+}
+
+func (pubKey PubKeyBls) GetVrfVerifier() vrf.PublicKey {
+	return &pubKey
 }

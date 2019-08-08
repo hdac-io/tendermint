@@ -2,9 +2,9 @@ package types
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math"
-	"math/big"
 	"sort"
 	"strings"
 
@@ -24,8 +24,7 @@ import (
 // the maximum allowed distance between validator priorities.
 
 const (
-	MaxTotalVotingPower      = int64(math.MaxInt64) / 8
-	PriorityWindowSizeFactor = 2
+	MaxTotalVotingPower = int64(math.MaxInt64) / 8
 )
 
 // ValidatorSet represent a set of *Validator at a given height.
@@ -45,6 +44,9 @@ type ValidatorSet struct {
 
 	// cached (unexported)
 	totalVotingPower int64
+	vrfMessage       *VrfMessage
+	selectedMarkup   []bool
+	selectedCnt      int
 }
 
 // NewValidatorSet initializes a ValidatorSet by copying over the
@@ -58,143 +60,12 @@ func NewValidatorSet(valz []*Validator) *ValidatorSet {
 	if err != nil {
 		panic(fmt.Sprintf("cannot create validator set: %s", err))
 	}
-	if len(valz) > 0 {
-		vals.IncrementProposerPriority(1)
-	}
 	return vals
 }
 
 // Nil or empty validator sets are invalid.
 func (vals *ValidatorSet) IsNilOrEmpty() bool {
 	return vals == nil || len(vals.Validators) == 0
-}
-
-// Increment ProposerPriority and update the proposer on a copy, and return it.
-func (vals *ValidatorSet) CopyIncrementProposerPriority(times int) *ValidatorSet {
-	copy := vals.Copy()
-	copy.IncrementProposerPriority(times)
-	return copy
-}
-
-// IncrementProposerPriority increments ProposerPriority of each validator and updates the
-// proposer. Panics if validator set is empty.
-// `times` must be positive.
-func (vals *ValidatorSet) IncrementProposerPriority(times int) {
-	if vals.IsNilOrEmpty() {
-		panic("empty validator set")
-	}
-	if times <= 0 {
-		panic("Cannot call IncrementProposerPriority with non-positive times")
-	}
-
-	// Cap the difference between priorities to be proportional to 2*totalPower by
-	// re-normalizing priorities, i.e., rescale all priorities by multiplying with:
-	//  2*totalVotingPower/(maxPriority - minPriority)
-	diffMax := PriorityWindowSizeFactor * vals.TotalVotingPower()
-	vals.RescalePriorities(diffMax)
-	vals.shiftByAvgProposerPriority()
-
-	var proposer *Validator
-	// Call IncrementProposerPriority(1) times times.
-	for i := 0; i < times; i++ {
-		proposer = vals.incrementProposerPriority()
-	}
-
-	vals.Proposer = proposer
-}
-
-func (vals *ValidatorSet) RescalePriorities(diffMax int64) {
-	if vals.IsNilOrEmpty() {
-		panic("empty validator set")
-	}
-	// NOTE: This check is merely a sanity check which could be
-	// removed if all tests would init. voting power appropriately;
-	// i.e. diffMax should always be > 0
-	if diffMax <= 0 {
-		return
-	}
-
-	// Calculating ceil(diff/diffMax):
-	// Re-normalization is performed by dividing by an integer for simplicity.
-	// NOTE: This may make debugging priority issues easier as well.
-	diff := computeMaxMinPriorityDiff(vals)
-	ratio := (diff + diffMax - 1) / diffMax
-	if diff > diffMax {
-		for _, val := range vals.Validators {
-			val.ProposerPriority /= ratio
-		}
-	}
-}
-
-func (vals *ValidatorSet) incrementProposerPriority() *Validator {
-	for _, val := range vals.Validators {
-		// Check for overflow for sum.
-		newPrio := safeAddClip(val.ProposerPriority, val.VotingPower)
-		val.ProposerPriority = newPrio
-	}
-	// Decrement the validator with most ProposerPriority.
-	mostest := vals.getValWithMostPriority()
-	// Mind the underflow.
-	mostest.ProposerPriority = safeSubClip(mostest.ProposerPriority, vals.TotalVotingPower())
-
-	return mostest
-}
-
-// Should not be called on an empty validator set.
-func (vals *ValidatorSet) computeAvgProposerPriority() int64 {
-	n := int64(len(vals.Validators))
-	sum := big.NewInt(0)
-	for _, val := range vals.Validators {
-		sum.Add(sum, big.NewInt(val.ProposerPriority))
-	}
-	avg := sum.Div(sum, big.NewInt(n))
-	if avg.IsInt64() {
-		return avg.Int64()
-	}
-
-	// This should never happen: each val.ProposerPriority is in bounds of int64.
-	panic(fmt.Sprintf("Cannot represent avg ProposerPriority as an int64 %v", avg))
-}
-
-// Compute the difference between the max and min ProposerPriority of that set.
-func computeMaxMinPriorityDiff(vals *ValidatorSet) int64 {
-	if vals.IsNilOrEmpty() {
-		panic("empty validator set")
-	}
-	max := int64(math.MinInt64)
-	min := int64(math.MaxInt64)
-	for _, v := range vals.Validators {
-		if v.ProposerPriority < min {
-			min = v.ProposerPriority
-		}
-		if v.ProposerPriority > max {
-			max = v.ProposerPriority
-		}
-	}
-	diff := max - min
-	if diff < 0 {
-		return -1 * diff
-	} else {
-		return diff
-	}
-}
-
-func (vals *ValidatorSet) getValWithMostPriority() *Validator {
-	var res *Validator
-	for _, val := range vals.Validators {
-		res = res.CompareProposerPriority(val)
-	}
-	return res
-}
-
-func (vals *ValidatorSet) shiftByAvgProposerPriority() {
-	if vals.IsNilOrEmpty() {
-		panic("empty validator set")
-	}
-	avgProposerPriority := vals.computeAvgProposerPriority()
-	for _, val := range vals.Validators {
-		val.ProposerPriority = safeSubClip(val.ProposerPriority, avgProposerPriority)
-	}
 }
 
 // Makes a copy of the validator list.
@@ -215,6 +86,9 @@ func (vals *ValidatorSet) Copy() *ValidatorSet {
 		Validators:       validatorListCopy(vals.Validators),
 		Proposer:         vals.Proposer,
 		totalVotingPower: vals.totalVotingPower,
+		vrfMessage:       vals.vrfMessage,
+		selectedMarkup:   vals.selectedMarkup,
+		selectedCnt:      vals.selectedCnt,
 	}
 }
 
@@ -282,6 +156,14 @@ func (vals *ValidatorSet) TotalVotingPower() int64 {
 	return vals.totalVotingPower
 }
 
+// SetVrfMessage must be set only verified message, ValidatorSet will be using without re-verification
+func (vals *ValidatorSet) SetVrfMessage(msg *VrfMessage) {
+	vals.vrfMessage = msg
+	vals.selectedMarkup = make([]bool, vals.Size())
+	vals.selectedCnt = 0
+	vals.UpdateProposer()
+}
+
 // GetProposer returns the current proposer. If the validator set is empty, nil
 // is returned.
 func (vals *ValidatorSet) GetProposer() (proposer *Validator) {
@@ -289,19 +171,58 @@ func (vals *ValidatorSet) GetProposer() (proposer *Validator) {
 		return nil
 	}
 	if vals.Proposer == nil {
-		vals.Proposer = vals.findProposer()
+		vals.Proposer = vals.UpdateProposer()
 	}
 	return vals.Proposer.Copy()
 }
 
-func (vals *ValidatorSet) findProposer() *Validator {
-	var proposer *Validator
-	for _, val := range vals.Validators {
-		if proposer == nil || !bytes.Equal(val.Address, proposer.Address) {
-			proposer = proposer.CompareProposerPriority(val)
+func (vals *ValidatorSet) UpdateProposer() *Validator {
+	var proposerIndex int
+
+	if vals.vrfMessage == nil {
+		proposerIndex = 0
+	} else {
+		if vals.selectedCnt != 0 {
+			previousProposerIndex, _ := vals.GetByAddress(vals.Proposer.Address)
+			vals.selectedMarkup[previousProposerIndex] = true
+
+			// if check markup is full, init status
+			if vals.selectedCnt == vals.Size() {
+				vals.selectedMarkup = make([]bool, vals.Size())
+				vals.selectedCnt = 0
+			}
 		}
+
+		validatorIndices := []int{}
+		cumulativeSumInterval := []int64{}
+		var cumulativeSum int64
+		for i := 0; i < vals.Size(); i++ {
+			if vals.selectedMarkup[i] == true {
+				continue
+			}
+
+			_, val := vals.GetByIndex(i)
+			cumulativeSum += val.VotingPower
+			cumulativeSumInterval = append(cumulativeSumInterval, cumulativeSum)
+			validatorIndices = append(validatorIndices, i)
+		}
+
+		randHashToInt := int64(binary.LittleEndian.Uint32(vals.vrfMessage.Rand[:]))
+		maxCumulativeSum := cumulativeSumInterval[len(cumulativeSumInterval)-1]
+		cumulativeRand := randHashToInt % maxCumulativeSum
+
+		upperBoundIndex := sort.Search(
+			len(cumulativeSumInterval),
+			func(i int) bool { return cumulativeSumInterval[i] > cumulativeRand })
+
+		proposerIndex = validatorIndices[upperBoundIndex]
+
+		println("selected proposer. cumulativeRand=", cumulativeRand, "cumulativeSumInterval=", cumulativeSumInterval, "selectedCnt=", vals.selectedCnt)
+		vals.selectedCnt++
 	}
-	return proposer
+
+	_, vals.Proposer = vals.GetByIndex(proposerIndex)
+	return vals.Proposer
 }
 
 // Hash returns the Merkle root hash build using validators (as leaves) in the
@@ -404,33 +325,6 @@ func verifyUpdates(updates []*Validator, vals *ValidatorSet) (updatedTotalVoting
 	}
 
 	return updatedTotalVotingPower, numNewValidators, nil
-}
-
-// Computes the proposer priority for the validators not present in the set based on 'updatedTotalVotingPower'.
-// Leaves unchanged the priorities of validators that are changed.
-//
-// 'updates' parameter must be a list of unique validators to be added or updated.
-// No changes are made to the validator set 'vals'.
-func computeNewPriorities(updates []*Validator, vals *ValidatorSet, updatedTotalVotingPower int64) {
-
-	for _, valUpdate := range updates {
-		address := valUpdate.Address
-		_, val := vals.GetByAddress(address)
-		if val == nil {
-			// add val
-			// Set ProposerPriority to -C*totalVotingPower (with C ~= 1.125) to make sure validators can't
-			// un-bond and then re-bond to reset their (potentially previously negative) ProposerPriority to zero.
-			//
-			// Contract: updatedVotingPower < MaxTotalVotingPower to ensure ProposerPriority does
-			// not exceed the bounds of int64.
-			//
-			// Compute ProposerPriority = -1.125*totalVotingPower == -(updatedVotingPower + (updatedVotingPower >> 3)).
-			valUpdate.ProposerPriority = -(updatedTotalVotingPower + (updatedTotalVotingPower >> 3))
-		} else {
-			valUpdate.ProposerPriority = val.ProposerPriority
-		}
-	}
-
 }
 
 // Merges the vals' validator list with the updates list.
@@ -545,7 +439,7 @@ func (vals *ValidatorSet) updateWithChangeSet(changes []*Validator, allowDeletes
 	}
 
 	// Verify that applying the 'updates' against 'vals' will not result in error.
-	updatedTotalVotingPower, numNewValidators, err := verifyUpdates(updates, vals)
+	_, numNewValidators, err := verifyUpdates(updates, vals)
 	if err != nil {
 		return err
 	}
@@ -554,20 +448,14 @@ func (vals *ValidatorSet) updateWithChangeSet(changes []*Validator, allowDeletes
 	if numNewValidators == 0 && len(vals.Validators) == len(deletes) {
 		return errors.New("applying the validator changes would result in empty set")
 	}
-
-	// Compute the priorities for updates.
-	computeNewPriorities(updates, vals, updatedTotalVotingPower)
-
 	// Apply updates and removals.
 	vals.applyUpdates(updates)
 	vals.applyRemovals(deletes)
 
 	vals.updateTotalVotingPower()
 
-	// Scale and center.
-	vals.RescalePriorities(PriorityWindowSizeFactor * vals.TotalVotingPower())
-	vals.shiftByAvgProposerPriority()
-
+	vals.selectedMarkup = make([]bool, vals.Size())
+	vals.selectedCnt = 0
 	return nil
 }
 

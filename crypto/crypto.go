@@ -3,6 +3,7 @@ package crypto
 import (
 	"github.com/hdac-io/tendermint/crypto/tmhash"
 	cmn "github.com/hdac-io/tendermint/libs/common"
+	"github.com/hdac-io/tendermint/crypto/vrf"
 )
 
 const (
@@ -24,6 +25,8 @@ type PubKey interface {
 	Bytes() []byte
 	VerifyBytes(msg []byte, sig []byte) bool
 	Equals(PubKey) bool
+
+	GetVrfVerifier() vrf.PublicKey //If cannot support vrf concrete type, nil is returned
 }
 
 type PrivKey interface {
@@ -31,6 +34,8 @@ type PrivKey interface {
 	Sign(msg []byte) ([]byte, error)
 	PubKey() PubKey
 	Equals(PrivKey) bool
+
+	GetVrfSigner() vrf.PrivateKey //If cannot support vrf concrete type, nil is returned
 }
 
 type Symmetric interface {

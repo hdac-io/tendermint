@@ -17,6 +17,7 @@ type PrivValidator interface {
 
 	SignVote(chainID string, vote *Vote) error
 	SignProposal(chainID string, proposal *Proposal) error
+	EvaluateVrf(blockHash []byte) ([32]byte, []byte)
 }
 
 //----------------------------------------
@@ -94,6 +95,9 @@ func (pv *MockPV) SignProposal(chainID string, proposal *Proposal) error {
 	proposal.Signature = sig
 	return nil
 }
+func (pv *MockPV) EvaluateVrf(blockHash []byte) ([32]byte, []byte) {
+	return pv.privKey.GetVrfSigner().Evaluate(blockHash[:])
+}
 
 // String returns a string representation of the MockPV.
 func (pv *MockPV) String() string {
@@ -121,6 +125,10 @@ func (pv *erroringMockPV) SignVote(chainID string, vote *Vote) error {
 // Implements PrivValidator.
 func (pv *erroringMockPV) SignProposal(chainID string, proposal *Proposal) error {
 	return ErroringMockPVErr
+}
+
+func (pv *erroringMockPV) EvaluateVrf(blockHash []byte) ([32]byte, []byte) {
+	return pv.privKey.GetVrfSigner().Evaluate(blockHash[:])
 }
 
 // NewErroringMockPV returns a MockPV that fails on each signing request. Again, for testing only.

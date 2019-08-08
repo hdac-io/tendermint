@@ -2,6 +2,7 @@ package multisig
 
 import (
 	"github.com/hdac-io/tendermint/crypto"
+	"github.com/hdac-io/tendermint/crypto/vrf"
 )
 
 // PubKeyMultisigThreshold implements a K of N threshold multisig.
@@ -93,4 +94,9 @@ func (pk PubKeyMultisigThreshold) Equals(other crypto.PubKey) bool {
 		}
 	}
 	return true
+}
+
+// GetVrfVerifier - multisig isn't support vrf
+func (pk PubKeyMultisigThreshold) GetVrfVerifier() vrf.PublicKey {
+	return nil
 }

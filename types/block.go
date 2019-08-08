@@ -41,6 +41,26 @@ type Block struct {
 	LastCommit *Commit      `json:"last_commit"`
 }
 
+// MakeBlock returns a new block with an empty header, except what can be
+// computed from itself.
+// It populates the same set of fields validated by ValidateBasic.
+func MakeBlock(height int64, txs []Tx, lastCommit *Commit, evidence []Evidence, vrfMessage VrfMessage) *Block {
+	block := &Block{
+		Header: Header{
+			Height: height,
+			NumTxs: int64(len(txs)),
+		},
+		Data: Data{
+			Txs:        txs,
+			VrfMessage: vrfMessage,
+		},
+		Evidence:   EvidenceData{Evidence: evidence},
+		LastCommit: lastCommit,
+	}
+	block.fillHeader()
+	return block
+}
+
 // ValidateBasic performs basic validation that doesn't involve state data.
 // It checks the internal consistency of the block.
 // Further validation is done using state#ValidateBlock.
@@ -770,6 +790,24 @@ func (sh SignedHeader) StringIndented(indent string) string {
 
 //-----------------------------------------------------------------------------
 
+// VrfMessage it's for proposer selection
+type VrfMessage struct {
+	Rand            [32]byte
+	Proof           []byte
+	ProposerAddress cmn.HexBytes
+}
+
+// NewVrfMessage make VrfMessage
+func NewVrfMessage(privVal PrivValidator, targetHash []byte) VrfMessage {
+
+	rand, proof := privVal.EvaluateVrf(targetHash)
+	return VrfMessage{
+		Rand:            rand,
+		Proof:           proof,
+		ProposerAddress: privVal.GetPubKey().Address(),
+	}
+}
+
 // Data contains the set of transactions included in the block
 type Data struct {
 
@@ -777,6 +815,8 @@ type Data struct {
 	// NOTE: not all txs here are valid.  We're just agreeing on the order first.
 	// This means that block.AppHash does not include these txs.
 	Txs Txs `json:"txs"`
+
+	VrfMessage VrfMessage
 
 	// Volatile
 	hash cmn.HexBytes

@@ -1,7 +1,6 @@
 package types
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 
@@ -16,16 +15,13 @@ type Validator struct {
 	Address     Address       `json:"address"`
 	PubKey      crypto.PubKey `json:"pub_key"`
 	VotingPower int64         `json:"voting_power"`
-
-	ProposerPriority int64 `json:"proposer_priority"`
 }
 
 func NewValidator(pubKey crypto.PubKey, votingPower int64) *Validator {
 	return &Validator{
-		Address:          pubKey.Address(),
-		PubKey:           pubKey,
-		VotingPower:      votingPower,
-		ProposerPriority: 0,
+		Address:     pubKey.Address(),
+		PubKey:      pubKey,
+		VotingPower: votingPower,
 	}
 }
 
@@ -36,29 +32,6 @@ func (v *Validator) Copy() *Validator {
 	return &vCopy
 }
 
-// Returns the one with higher ProposerPriority.
-func (v *Validator) CompareProposerPriority(other *Validator) *Validator {
-	if v == nil {
-		return other
-	}
-	switch {
-	case v.ProposerPriority > other.ProposerPriority:
-		return v
-	case v.ProposerPriority < other.ProposerPriority:
-		return other
-	default:
-		result := bytes.Compare(v.Address, other.Address)
-		switch {
-		case result < 0:
-			return v
-		case result > 0:
-			return other
-		default:
-			panic("Cannot compare identical validators")
-		}
-	}
-}
-
 func (v *Validator) String() string {
 	if v == nil {
 		return "nil-Validator"
@@ -66,8 +39,7 @@ func (v *Validator) String() string {
 	return fmt.Sprintf("Validator{%v %v VP:%v A:%v}",
 		v.Address,
 		v.PubKey,
-		v.VotingPower,
-		v.ProposerPriority)
+		v.VotingPower)
 }
 
 // ValidatorListString returns a prettified validator list for logging purposes.

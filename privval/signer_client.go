@@ -129,3 +129,8 @@ func (sc *SignerClient) SignProposal(chainID string, proposal *types.Proposal) e
 
 	return nil
 }
+
+// EvaluateVrf not supported
+func (sc *SignerClient) EvaluateVrf(blockHash []byte) ([32]byte, []byte) {
+	panic("remote signer EvaluateVrf not supported yet")
+}

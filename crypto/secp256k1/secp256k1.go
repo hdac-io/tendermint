@@ -15,6 +15,7 @@ import (
 	amino "github.com/tendermint/go-amino"
 
 	"github.com/hdac-io/tendermint/crypto"
+	"github.com/hdac-io/tendermint/crypto/vrf"
 )
 
 //-------------------------------------
@@ -63,6 +64,11 @@ func (privKey PrivKeySecp256k1) Equals(other crypto.PrivKey) bool {
 		return subtle.ConstantTimeCompare(privKey[:], otherSecp[:]) == 1
 	}
 	return false
+}
+
+// GetVrfSigner - secp256k1 isn't support vrf
+func (privKey PrivKeySecp256k1) GetVrfSigner() vrf.PrivateKey {
+	return nil
 }
 
 // GenPrivKey generates a new ECDSA private key on curve secp256k1 private key.
@@ -168,4 +174,9 @@ func (pubKey PubKeySecp256k1) Equals(other crypto.PubKey) bool {
 		return bytes.Equal(pubKey[:], otherSecp[:])
 	}
 	return false
+}
+
+// GetVrfVerifier - secp256k1 isn't support vrf
+func (pubKey PubKeySecp256k1) GetVrfVerifier() vrf.PublicKey {
+	return nil
 }

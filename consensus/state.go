@@ -808,7 +808,6 @@ func (cs *ConsensusState) enterNewRound(height int64, round int) {
 	validators := cs.Validators
 	if cs.Round < round {
 		validators = validators.Copy()
-		validators.IncrementProposerPriority(round - cs.Round)
 	}
 
 	// Setup new round
@@ -816,15 +815,22 @@ func (cs *ConsensusState) enterNewRound(height int64, round int) {
 	// but we fire an event, so update the round step first
 	cs.updateRoundStep(round, cstypes.RoundStepNewRound)
 	cs.Validators = validators
+
 	if round == 0 {
 		// We've already reset these upon new height,
 		// and meanwhile we might have received a proposal
 		// for round 0.
+		if cs.Height > 2 {
+			lastBlock := cs.blockStore.LoadBlock(cs.Height - 1)
+			cs.Validators.SetVrfMessage(&lastBlock.Data.VrfMessage)
+		}
 	} else {
 		logger.Info("Resetting Proposal info")
 		cs.Proposal = nil
 		cs.ProposalBlock = nil
 		cs.ProposalBlockParts = nil
+
+		cs.Validators.UpdateProposer()
 	}
 	cs.Votes.SetRound(round + 1) // also track next round (round+1) to allow round-skipping
 	cs.TriggeredTimeoutPrecommit = false
@@ -985,8 +991,13 @@ func (cs *ConsensusState) createProposalBlock() (block *types.Block, blockParts 
 		return
 	}
 
+	var vrfMessage types.VrfMessage
+	if cs.Height != 1 {
+		vrfMessage = types.NewVrfMessage(cs.privValidator, cs.blockStore.LoadBlock(cs.Height-1).Hash().Bytes())
+	}
+
 	proposerAddr := cs.privValidator.GetPubKey().Address()
-	return cs.blockExec.CreateProposalBlock(cs.Height, cs.state, commit, proposerAddr)
+	return cs.blockExec.CreateProposalBlock(cs.Height, cs.state, commit, proposerAddr, vrfMessage)
 }
 
 // Enter: `timeoutPropose` after entering Propose.

@@ -11,6 +11,7 @@ import (
 
 	"github.com/hdac-io/tendermint/crypto"
 	"github.com/hdac-io/tendermint/crypto/tmhash"
+	"github.com/hdac-io/tendermint/crypto/vrf"
 )
 
 //-------------------------------------
@@ -90,6 +91,11 @@ func (privKey PrivKeyEd25519) Equals(other crypto.PrivKey) bool {
 	}
 }
 
+// GetVrfSigner - Ed25519 isn't support vrf
+func (privKey PrivKeyEd25519) GetVrfSigner() vrf.PrivateKey {
+	return nil
+}
+
 // GenPrivKey generates a new ed25519 private key.
 // It uses OS randomness in conjunction with the current global random seed
 // in tendermint/libs/common to generate the private key.
@@ -167,4 +173,9 @@ func (pubKey PubKeyEd25519) Equals(other crypto.PubKey) bool {
 	} else {
 		return false
 	}
+}
+
+// GetVrfVerifier - Ed25519 isn't support vrf
+func (pubKey PubKeyEd25519) GetVrfVerifier() vrf.PublicKey {
+	return nil
 }
