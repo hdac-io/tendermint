@@ -157,6 +157,8 @@ func validateBlock(evidencePool EvidencePool, stateDB dbm.DB, state State, block
 		)
 	}
 
+	//VRF ProofHash
+
 	return nil
 }
 

@@ -61,9 +61,10 @@ func initFilesWithConfig(config *cfg.Config) error {
 		}
 		key := pv.GetPubKey()
 		genDoc.Validators = []types.GenesisValidator{{
-			Address: key.Address(),
-			PubKey:  key,
-			Power:   10,
+			Address:   key.Address(),
+			PubKey:    key,
+			VrfPubKey: pv.GetVrfPubKey(),
+			Power:     10,
 		}}
 
 		if err := genDoc.SaveAs(genFile); err != nil {

@@ -235,6 +235,7 @@ message EvidenceParams {
 // ValidatorParams contains limits on validators.
 message ValidatorParams {
   repeated string pub_key_types = 1;
+  repeated string vrf_pub_key_types = 2;
 }
 
 message LastCommitInfo {
@@ -304,7 +305,8 @@ message Validator {
 // ValidatorUpdate
 message ValidatorUpdate {
   PubKey pub_key = 1 [(gogoproto.nullable)=false];
-  int64 power = 2;
+  VrfPubKey vrf_pub_key = 2 [(gogoproto.nullable)=false];
+  int64 power = 3;
 }
 
 // VoteInfo
@@ -316,6 +318,11 @@ message VoteInfo {
 message PubKey {
   string type = 1;
   bytes  data = 2;
+}
+
+message VrfPubKey {
+  string  type = 1;
+  bytes   data = 2;
 }
 
 message Evidence {

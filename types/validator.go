@@ -7,6 +7,7 @@ import (
 
 	"github.com/tendermint/tendermint/crypto"
 	cmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/libs/vrf"
 )
 
 // Volatile state for each Validator
@@ -15,15 +16,17 @@ import (
 type Validator struct {
 	Address     Address       `json:"address"`
 	PubKey      crypto.PubKey `json:"pub_key"`
+	VrfPubKey   vrf.PublicKey `json:"vrf_pub_key"`
 	VotingPower int64         `json:"voting_power"`
 
 	ProposerPriority int64 `json:"proposer_priority"`
 }
 
-func NewValidator(pubKey crypto.PubKey, votingPower int64) *Validator {
+func NewValidator(pubKey crypto.PubKey, vrfPubKey vrf.PublicKey, votingPower int64) *Validator {
 	return &Validator{
 		Address:          pubKey.Address(),
 		PubKey:           pubKey,
+		VrfPubKey:        vrfPubKey,
 		VotingPower:      votingPower,
 		ProposerPriority: 0,
 	}
@@ -104,6 +107,6 @@ func RandValidator(randPower bool, minPower int64) (*Validator, PrivValidator) {
 		votePower += int64(cmn.RandUint32())
 	}
 	pubKey := privVal.GetPubKey()
-	val := NewValidator(pubKey, votePower)
+	val := NewValidator(pubKey, privVal.GetVrfPubKey(), votePower)
 	return val, privVal
 }

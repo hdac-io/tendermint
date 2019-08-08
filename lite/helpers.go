@@ -4,6 +4,7 @@ import (
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/ed25519"
 	"github.com/tendermint/tendermint/crypto/secp256k1"
+	"github.com/tendermint/tendermint/libs/vrf/p256"
 
 	"github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
@@ -16,6 +17,7 @@ import (
 //
 // You can set different weights of validators each time you call ToValidators,
 // and can optionally extend the validator set later with Extend.
+//type privKeys []crypto.PrivKey
 type privKeys []crypto.PrivKey
 
 // genPrivKeys produces an array of private keys to generate commits.
@@ -63,7 +65,9 @@ func (pkz privKeys) ExtendSecp(n int) privKeys {
 func (pkz privKeys) ToValidators(init, inc int64) *types.ValidatorSet {
 	res := make([]*types.Validator, len(pkz))
 	for i, k := range pkz {
-		res[i] = types.NewValidator(k.PubKey(), init+int64(i)*inc)
+		//make dummy for testing
+		_, vrfPubKey := p256.GenerateKey()
+		res[i] = types.NewValidator(k.PubKey(), vrfPubKey, init+int64(i)*inc)
 	}
 	return types.NewValidatorSet(res)
 }

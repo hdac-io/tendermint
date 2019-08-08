@@ -2,11 +2,13 @@ package state_test
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"fmt"
 
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/ed25519"
+	"github.com/tendermint/tendermint/libs/vrf/p256"
 	"github.com/tendermint/tendermint/proxy"
 	sm "github.com/tendermint/tendermint/state"
 	"github.com/tendermint/tendermint/types"
@@ -96,12 +98,14 @@ func makeState(nVals, height int) (sm.State, dbm.DB, map[string]types.PrivValida
 	for i := 0; i < nVals; i++ {
 		secret := []byte(fmt.Sprintf("test%d", i))
 		pk := ed25519.GenPrivKeyFromSecret(secret)
+		vrfPrivKey, _ := p256.GenerateKey()
 		valAddr := pk.PubKey().Address()
 		vals[i] = types.GenesisValidator{
-			Address: valAddr,
-			PubKey:  pk.PubKey(),
-			Power:   1000,
-			Name:    fmt.Sprintf("test%d", i),
+			Address:   valAddr,
+			PubKey:    pk.PubKey(),
+			VrfPubKey: p256.PublicKey{PublicKey: pv.Key.VrfPrivKey.Public().(*ecdsa.PublicKey)},
+			Power:     1000,
+			Name:      fmt.Sprintf("test%d", i),
 		}
 		privVals[valAddr.String()] = types.NewMockPVWithParams(pk, false, false)
 	}

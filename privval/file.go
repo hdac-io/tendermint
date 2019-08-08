@@ -2,6 +2,7 @@ package privval
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -10,6 +11,8 @@ import (
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/ed25519"
 	cmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/libs/vrf"
+	"github.com/tendermint/tendermint/libs/vrf/p256"
 	"github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
 )
@@ -38,11 +41,11 @@ func voteToStep(vote *types.Vote) int8 {
 
 // FilePVKey stores the immutable part of PrivValidator.
 type FilePVKey struct {
-	Address types.Address  `json:"address"`
-	PubKey  crypto.PubKey  `json:"pub_key"`
-	PrivKey crypto.PrivKey `json:"priv_key"`
-
-	filePath string
+	Address    types.Address  `json:"address"`
+	PubKey     crypto.PubKey  `json:"pub_key"`
+	PrivKey    crypto.PrivKey `json:"priv_key"`
+	VrfPrivKey vrf.PrivateKey `json:"vrf_priv_key"`
+	filePath   string
 }
 
 // Save persists the FilePVKey to its filePath.
@@ -56,6 +59,7 @@ func (pvKey FilePVKey) Save() {
 	if err != nil {
 		panic(err)
 	}
+
 	err = cmn.WriteFileAtomic(outFile, jsonBytes, 0600)
 	if err != nil {
 		panic(err)
@@ -143,13 +147,15 @@ type FilePV struct {
 // and sets the filePaths, but does not call Save().
 func GenFilePV(keyFilePath, stateFilePath string) *FilePV {
 	privKey := ed25519.GenPrivKey()
+	vrfPrivKey, _ := p256.GenerateKey()
 
 	return &FilePV{
 		Key: FilePVKey{
-			Address:  privKey.PubKey().Address(),
-			PubKey:   privKey.PubKey(),
-			PrivKey:  privKey,
-			filePath: keyFilePath,
+			Address:    privKey.PubKey().Address(),
+			PubKey:     privKey.PubKey(),
+			PrivKey:    privKey,
+			VrfPrivKey: vrfPrivKey,
+			filePath:   keyFilePath,
 		},
 		LastSignState: FilePVLastSignState{
 			Step:     stepNone,
@@ -233,6 +239,12 @@ func (pv *FilePV) GetPubKey() crypto.PubKey {
 	return pv.Key.PubKey
 }
 
+// GetVrfPubKey returns the VRF public key of the validator.
+// Implements PrivValidator.
+func (pv *FilePV) GetVrfPubKey() vrf.PublicKey {
+	return &p256.PublicKey{PublicKey: pv.Key.VrfPrivKey.Public().(*ecdsa.PublicKey)}
+}
+
 // SignVote signs a canonical representation of the vote, along with the
 // chainID. Implements PrivValidator.
 func (pv *FilePV) SignVote(chainID string, vote *types.Vote) error {
@@ -249,6 +261,11 @@ func (pv *FilePV) SignProposal(chainID string, proposal *types.Proposal) error {
 		return fmt.Errorf("error signing proposal: %v", err)
 	}
 	return nil
+}
+
+func (pv *FilePV) EvaluateVrf(blockHash []byte) (error, [32]byte, []byte) {
+	rand, proof := pv.Key.VrfPrivKey.Evaluate(blockHash[:])
+	return nil, rand, proof
 }
 
 // Save persists the FilePV to disk.

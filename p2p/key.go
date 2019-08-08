@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"io/ioutil"
 
+	"github.com/tendermint/tendermint/libs/vrf"
+	"github.com/tendermint/tendermint/libs/vrf/p256"
+
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/ed25519"
 	cmn "github.com/tendermint/tendermint/libs/common"
@@ -25,7 +28,8 @@ const IDByteLength = crypto.AddressSize
 // NodeKey is the persistent peer key.
 // It contains the nodes private key for authentication.
 type NodeKey struct {
-	PrivKey crypto.PrivKey `json:"priv_key"` // our priv key
+	PrivKey    crypto.PrivKey `json:"priv_key"` // our priv key
+	VrfPrivKey vrf.PrivateKey `json:"vrf_priv_key"`
 }
 
 // ID returns the peer's canonical ID - the hash of its public key.
@@ -36,6 +40,11 @@ func (nodeKey *NodeKey) ID() ID {
 // PubKey returns the peer's PubKey
 func (nodeKey *NodeKey) PubKey() crypto.PubKey {
 	return nodeKey.PrivKey.PubKey()
+}
+
+// VrfPubKey returns the peer's VrfPubKey
+func (nodeKey *NodeKey) VrfPubKey() vrf.PublicKey {
+	return nodeKey.VrfPrivKey.Public().(vrf.PublicKey)
 }
 
 // PubKeyToID returns the ID corresponding to the given PubKey.
@@ -75,6 +84,7 @@ func genNodeKey(filePath string) (*NodeKey, error) {
 	nodeKey := &NodeKey{
 		PrivKey: privKey,
 	}
+	nodeKey.VrfPrivKey, _ = p256.NewVRFSignerFromRawKey(privKey.Bytes())
 
 	jsonBytes, err := cdc.MarshalJSON(nodeKey)
 	if err != nil {

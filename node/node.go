@@ -379,7 +379,8 @@ func createConsensusReactor(config *cfg.Config,
 	csMetrics *cs.Metrics,
 	fastSync bool,
 	eventBus *types.EventBus,
-	consensusLogger log.Logger) (*consensus.ConsensusReactor, *consensus.ConsensusState) {
+	consensusLogger log.Logger,
+) (*consensus.ConsensusReactor, *consensus.ConsensusState) {
 
 	consensusState := cs.NewConsensusState(
 		config.Consensus,
@@ -585,7 +586,7 @@ func NewNode(config *cfg.Config,
 		return nil, err
 	}
 
-	// Reload the state. It will have the Version.Consensus.App set by the
+	// Reload the state. It will have the Version.Consensus.A  pp set by the
 	// Handshake, and may have other modifications as well (ie. depending on
 	// what happened during block replay).
 	state = sm.LoadState(stateDB)
@@ -1128,7 +1129,7 @@ func LoadStateFromDBOrGenesisDocProvider(stateDB dbm.DB, genesisDocProvider Gene
 		return sm.State{}, nil, err
 	}
 	return state, genDoc, nil
-}
+} 
 
 // panics if failed to unmarshal bytes
 func loadGenesisDoc(db dbm.DB) (*types.GenesisDoc, error) {

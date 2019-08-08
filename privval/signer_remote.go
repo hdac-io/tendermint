@@ -1,6 +1,7 @@
 package privval
 
 import (
+	builtErrors "errors"
 	"fmt"
 	"io"
 	"net"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/tendermint/tendermint/crypto"
 	cmn "github.com/tendermint/tendermint/libs/common"
+	"github.com/tendermint/tendermint/libs/vrf"
+	"github.com/tendermint/tendermint/libs/vrf/p256"
 	"github.com/tendermint/tendermint/types"
 )
 
@@ -46,6 +49,11 @@ func (sc *SignerRemote) Close() error {
 // GetPubKey implements PrivValidator.
 func (sc *SignerRemote) GetPubKey() crypto.PubKey {
 	return sc.consensusPubKey
+}
+
+// GetVrfPubKey implements PrivValidator.
+func (sc *SignerRemote) GetVrfPubKey() vrf.PublicKey {
+	return &p256.PublicKey{}
 }
 
 // not thread-safe (only called on startup).
@@ -117,6 +125,12 @@ func (sc *SignerRemote) SignProposal(chainID string, proposal *types.Proposal) e
 	*proposal = *resp.Proposal
 
 	return nil
+}
+func (pv *SignerRemote) EvaluateVrf(blockHash []byte) (error, [32]byte, []byte) {
+	rand := [32]byte{}
+	proof := []byte{}
+
+	return builtErrors.New("NotImplemented"), rand, proof
 }
 
 // Ping is used to check connection health.

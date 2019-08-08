@@ -9,6 +9,8 @@ import (
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/ed25519"
 	"github.com/tendermint/tendermint/crypto/secp256k1"
+	"github.com/tendermint/tendermint/libs/vrf"
+	"github.com/tendermint/tendermint/libs/vrf/p256"
 )
 
 //-------------------------------------------------------
@@ -24,10 +26,18 @@ const (
 	ABCIPubKeyTypeSecp256k1 = "secp256k1"
 )
 
+const (
+	ABCIVrfPubKeyTypeP256 = "P256"
+)
+
 // TODO: Make non-global by allowing for registration of more pubkey types
 var ABCIPubKeyTypesToAminoNames = map[string]string{
 	ABCIPubKeyTypeEd25519:   ed25519.PubKeyAminoName,
 	ABCIPubKeyTypeSecp256k1: secp256k1.PubKeyAminoName,
+}
+
+var ABCIVrfPubKeyTypesToAminoNames = map[string]string{
+	ABCIVrfPubKeyTypeP256: p256.PubKeyAminoName,
 }
 
 //-------------------------------------------------------
@@ -90,8 +100,9 @@ func (tm2pb) PartSetHeader(header PartSetHeader) abci.PartSetHeader {
 // XXX: panics on unknown pubkey type
 func (tm2pb) ValidatorUpdate(val *Validator) abci.ValidatorUpdate {
 	return abci.ValidatorUpdate{
-		PubKey: TM2PB.PubKey(val.PubKey),
-		Power:  val.VotingPower,
+		PubKey:    TM2PB.PubKey(val.PubKey),
+		VrfPubKey: TM2PB.VrfPubKey(val.VrfPubKey),
+		Power:     val.VotingPower,
 	}
 }
 
@@ -108,6 +119,20 @@ func (tm2pb) PubKey(pubKey crypto.PubKey) abci.PubKey {
 		return abci.PubKey{
 			Type: ABCIPubKeyTypeSecp256k1,
 			Data: pk[:],
+		}
+	default:
+		panic(fmt.Sprintf("unknown pubkey type: %v %v", pubKey, reflect.TypeOf(pubKey)))
+	}
+}
+
+// XXX: panics on nil or unknown pubkey type
+// TODO: add cases when new pubkey types are added to crypto
+func (tm2pb) VrfPubKey(pubKey vrf.PublicKey) abci.VrfPubKey {
+	switch pk := pubKey.(type) {
+	case *p256.PublicKey:
+		return abci.VrfPubKey{
+			Type: ABCIVrfPubKeyTypeP256,
+			Data: append(pk.PublicKey.X.Bytes(), pk.PublicKey.Y.Bytes()...),
 		}
 	default:
 		panic(fmt.Sprintf("unknown pubkey type: %v %v", pubKey, reflect.TypeOf(pubKey)))
@@ -133,7 +158,8 @@ func (tm2pb) ConsensusParams(params *ConsensusParams) *abci.ConsensusParams {
 			MaxAge: params.Evidence.MaxAge,
 		},
 		Validator: &abci.ValidatorParams{
-			PubKeyTypes: params.Validator.PubKeyTypes,
+			PubKeyTypes:    params.Validator.PubKeyTypes,
+			VrfPubKeyTypes: params.Validator.VrfPubKeyTypes,
 		},
 	}
 }
@@ -170,11 +196,13 @@ func (tm2pb) Evidence(ev Evidence, valSet *ValidatorSet, evTime time.Time) abci.
 }
 
 // XXX: panics on nil or unknown pubkey type
-func (tm2pb) NewValidatorUpdate(pubkey crypto.PubKey, power int64) abci.ValidatorUpdate {
+func (tm2pb) NewValidatorUpdate(pubkey crypto.PubKey, vrfPubKey vrf.PublicKey, power int64) abci.ValidatorUpdate {
 	pubkeyABCI := TM2PB.PubKey(pubkey)
+	vrfPubKeyABCI := TM2PB.VrfPubKey(vrfPubKey)
 	return abci.ValidatorUpdate{
-		PubKey: pubkeyABCI,
-		Power:  power,
+		PubKey:    pubkeyABCI,
+		VrfPubKey: vrfPubKeyABCI,
+		Power:     power,
 	}
 }
 
@@ -209,6 +237,20 @@ func (pb2tm) PubKey(pubKey abci.PubKey) (crypto.PubKey, error) {
 	}
 }
 
+func (pb2tm) VrfPubKey(pubKey abci.VrfPubKey) (vrf.PublicKey, error) {
+	switch pubKey.Type {
+	case ABCIVrfPubKeyTypeP256:
+		//TODO :Add to validate
+		_, pkey := p256.GenerateKey()
+		pk := pkey.(*p256.PublicKey)
+		pk.X.SetBytes(pubKey.Data[:len(pubKey.Data)/2])
+		pk.Y.SetBytes(pubKey.Data[len(pubKey.Data)/2:])
+		return pk, nil
+	default:
+		return nil, fmt.Errorf("Unknown vrf pubkey type %v", pubKey.Type)
+	}
+}
+
 func (pb2tm) ValidatorUpdates(vals []abci.ValidatorUpdate) ([]*Validator, error) {
 	tmVals := make([]*Validator, len(vals))
 	for i, v := range vals {
@@ -216,7 +258,13 @@ func (pb2tm) ValidatorUpdates(vals []abci.ValidatorUpdate) ([]*Validator, error)
 		if err != nil {
 			return nil, err
 		}
-		tmVals[i] = NewValidator(pub, v.Power)
+
+		vrfPub, err := PB2TM.VrfPubKey(v.VrfPubKey)
+		if err != nil {
+			return nil, err
+		}
+
+		tmVals[i] = NewValidator(pub, vrfPub, v.Power)
 	}
 	return tmVals, nil
 }

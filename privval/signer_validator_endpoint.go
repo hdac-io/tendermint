@@ -9,6 +9,8 @@ import (
 	"github.com/tendermint/tendermint/crypto"
 	cmn "github.com/tendermint/tendermint/libs/common"
 	"github.com/tendermint/tendermint/libs/log"
+	"github.com/tendermint/tendermint/libs/vrf"
+	"github.com/tendermint/tendermint/libs/vrf/p256"
 	"github.com/tendermint/tendermint/types"
 )
 
@@ -79,6 +81,13 @@ func (ve *SignerValidatorEndpoint) GetPubKey() crypto.PubKey {
 	return ve.signer.GetPubKey()
 }
 
+// GetVrfPubKey implements PrivValidator.
+func (ve *SignerValidatorEndpoint) GetVrfPubKey() vrf.PublicKey {
+	ve.mtx.Lock()
+	defer ve.mtx.Unlock()
+	return &p256.PublicKey{}
+}
+
 // SignVote implements PrivValidator.
 func (ve *SignerValidatorEndpoint) SignVote(chainID string, vote *types.Vote) error {
 	ve.mtx.Lock()
@@ -91,6 +100,12 @@ func (ve *SignerValidatorEndpoint) SignProposal(chainID string, proposal *types.
 	ve.mtx.Lock()
 	defer ve.mtx.Unlock()
 	return ve.signer.SignProposal(chainID, proposal)
+}
+
+func (ve *SignerValidatorEndpoint) EvaluateVrf(blockHash []byte) (error, [32]byte, []byte) {
+	ve.mtx.Lock()
+	defer ve.mtx.Unlock()
+	return ve.signer.EvaluateVrf(blockHash)
 }
 
 //--------------------------------------------------------

@@ -133,10 +133,11 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 
 		pv := privval.LoadFilePV(pvKeyFile, pvStateFile)
 		genVals[i] = types.GenesisValidator{
-			Address: pv.GetPubKey().Address(),
-			PubKey:  pv.GetPubKey(),
-			Power:   1,
-			Name:    nodeDirName,
+			Address:   pv.GetPubKey().Address(),
+			PubKey:    pv.GetPubKey(),
+			VrfPubKey: pv.GetVrfPubKey(),
+			Power:     1,
+			Name:      nodeDirName,
 		}
 	}
 

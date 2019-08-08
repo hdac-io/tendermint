@@ -31,8 +31,9 @@ func randGenesisDoc(numValidators int, randPower bool, minPower int64) (*types.G
 	for i := 0; i < numValidators; i++ {
 		val, privVal := types.RandValidator(randPower, minPower)
 		validators[i] = types.GenesisValidator{
-			PubKey: val.PubKey,
-			Power:  val.VotingPower,
+			PubKey:    val.PubKey,
+			VrfPubKey: val.VrfPubKey,
+			Power:     val.VotingPower,
 		}
 		privValidators[i] = privVal
 	}

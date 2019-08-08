@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"reflect"
 	"runtime/debug"
@@ -786,6 +787,7 @@ func (cs *ConsensusState) enterNewRound(height int64, round int) {
 	logger.Info(fmt.Sprintf("enterNewRound(%v/%v). Current: %v/%v/%v", height, round, cs.Height, cs.Round, cs.Step))
 
 	// Increment validators if necessary
+	previousValidators := cs.Validators
 	validators := cs.Validators
 	if cs.Round < round {
 		validators = validators.Copy()
@@ -797,6 +799,12 @@ func (cs *ConsensusState) enterNewRound(height int64, round int) {
 	// but we fire an event, so update the round step first
 	cs.updateRoundStep(round, cstypes.RoundStepNewRound)
 	cs.Validators = validators
+	proposerUpdateErr := cs.updateProposer(previousValidators)
+	if proposerUpdateErr != nil {
+		logger.Debug("updateProposer failed.", "error", proposerUpdateErr)
+		return
+	}
+
 	if round == 0 {
 		// We've already reset these upon new height,
 		// and meanwhile we might have received a proposal
@@ -892,6 +900,38 @@ func (cs *ConsensusState) isProposer(address []byte) bool {
 	return bytes.Equal(cs.Validators.GetProposer().Address, address)
 }
 
+func (cs *ConsensusState) updateProposer(previousValidators *types.ValidatorSet) error {
+	if previousValidators == nil {
+		panic("Must be pass previousValidator arg")
+	}
+
+	var nextProposerIndex int
+	if cs.Height > 2 {
+		lastBlock := cs.blockStore.LoadBlock(cs.Height - 1)
+		hashBlock := cs.blockStore.LoadBlock(cs.Height - 2)
+
+		targetHash := hashBlock.Hash().Bytes()
+
+		_, previousProposer := previousValidators.GetByAddress(lastBlock.Data.VrfMessage.ProposerAddress)
+		proofRand, err := previousProposer.VrfPubKey.ProofToHash(targetHash, lastBlock.Data.VrfMessage.Proof)
+
+		if err != nil || proofRand != lastBlock.Data.VrfMessage.Rand {
+			return errors.New("failed ProofToHash")
+		}
+
+		nextProposerIndex = int(binary.LittleEndian.Uint32(lastBlock.Data.VrfMessage.Rand[:])) % previousValidators.Size()
+	}
+
+	nextProposerAddress, _ := previousValidators.GetByIndex(nextProposerIndex)
+	nextProposer := cs.Validators.SetProposerByAddress(nextProposerAddress)
+	if !bytes.Equal(nextProposer.Address, nextProposerAddress) {
+		//TODO:: faulty BP state handling
+		return errors.New("cannot found reserved proposer")
+	}
+
+	return nil
+}
+
 func (cs *ConsensusState) defaultDecideProposal(height int64, round int) {
 	var block *types.Block
 	var blockParts *types.PartSet
@@ -945,6 +985,19 @@ func (cs *ConsensusState) isProposalComplete() bool {
 
 }
 
+func (cs *ConsensusState) makeVrfMessage(targetHash []byte) types.VrfMessage {
+	err, rand, proof := cs.privValidator.EvaluateVrf(targetHash)
+	if err == nil {
+		return types.VrfMessage{
+			Rand:            rand,
+			Proof:           proof,
+			ProposerAddress: cs.privValidator.GetPubKey().Address(),
+		}
+	} else {
+		panic("failed evaluate vrf")
+	}
+}
+
 // Create the next block to propose and return it.
 // We really only need to return the parts, but the block
 // is returned for convenience so we can log the proposal block.
@@ -965,8 +1018,13 @@ func (cs *ConsensusState) createProposalBlock() (block *types.Block, blockParts 
 		return
 	}
 
+	var vrfMessage types.VrfMessage
+	if cs.Height != 1 {
+		vrfMessage = cs.makeVrfMessage(cs.blockStore.LoadBlock(cs.Height - 1).Hash().Bytes())
+	}
+
 	proposerAddr := cs.privValidator.GetPubKey().Address()
-	return cs.blockExec.CreateProposalBlock(cs.Height, cs.state, commit, proposerAddr)
+	return cs.blockExec.CreateProposalBlock(cs.Height, cs.state, commit, proposerAddr, vrfMessage)
 }
 
 // Enter: `timeoutPropose` after entering Propose.

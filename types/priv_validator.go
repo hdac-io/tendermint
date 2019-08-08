@@ -2,20 +2,25 @@ package types
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"errors"
 	"fmt"
 
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/ed25519"
+	"github.com/tendermint/tendermint/libs/vrf"
+	"github.com/tendermint/tendermint/libs/vrf/p256"
 )
 
 // PrivValidator defines the functionality of a local Tendermint validator
 // that signs votes and proposals, and never double signs.
 type PrivValidator interface {
 	GetPubKey() crypto.PubKey
+	GetVrfPubKey() vrf.PublicKey
 
 	SignVote(chainID string, vote *Vote) error
 	SignProposal(chainID string, proposal *Proposal) error
+	EvaluateVrf(blockHash []byte) (error, [32]byte, []byte)
 }
 
 //----------------------------------------
@@ -44,24 +49,32 @@ func (pvs PrivValidatorsByAddress) Swap(i, j int) {
 // Only use it for testing.
 type MockPV struct {
 	privKey              crypto.PrivKey
+	vrfPrivKey           vrf.PrivateKey
 	breakProposalSigning bool
 	breakVoteSigning     bool
 }
 
 func NewMockPV() *MockPV {
-	return &MockPV{ed25519.GenPrivKey(), false, false}
+	vrfPrivKey, _ := p256.GenerateKey()
+	return &MockPV{ed25519.GenPrivKey(), vrfPrivKey, false, false}
 }
 
 // NewMockPVWithParams allows one to create a MockPV instance, but with finer
 // grained control over the operation of the mock validator. This is useful for
 // mocking test failures.
-func NewMockPVWithParams(privKey crypto.PrivKey, breakProposalSigning, breakVoteSigning bool) *MockPV {
-	return &MockPV{privKey, breakProposalSigning, breakVoteSigning}
+func NewMockPVWithParams(privKey crypto.PrivKey, vrfPrivKey vrf.PrivateKey, breakProposalSigning, breakVoteSigning bool) *MockPV {
+	panic("must to implement vrf parameter")
+	return &MockPV{privKey, vrfPrivKey, breakProposalSigning, breakVoteSigning}
 }
 
 // Implements PrivValidator.
 func (pv *MockPV) GetPubKey() crypto.PubKey {
 	return pv.privKey.PubKey()
+}
+
+// Implements PrivValidator.
+func (pv *MockPV) GetVrfPubKey() vrf.PublicKey {
+	return &p256.PublicKey{PublicKey: pv.vrfPrivKey.Public().(*ecdsa.PublicKey)}
 }
 
 // Implements PrivValidator.
@@ -93,6 +106,16 @@ func (pv *MockPV) SignProposal(chainID string, proposal *Proposal) error {
 	proposal.Signature = sig
 	return nil
 }
+func (pv *MockPV) EvaluateVrf(blockHash []byte) (error, [32]byte, []byte) {
+
+	rand := [32]byte{}
+	proof := []byte{}
+	vrfPrivKey, err := p256.NewVRFSignerFromRawKey(pv.privKey.Bytes())
+	if err == nil {
+		rand, proof = vrfPrivKey.Evaluate(blockHash[:])
+	}
+	return err, rand, proof
+}
 
 // String returns a string representation of the MockPV.
 func (pv *MockPV) String() string {
@@ -122,7 +145,18 @@ func (pv *erroringMockPV) SignProposal(chainID string, proposal *Proposal) error
 	return ErroringMockPVErr
 }
 
+func (pv *erroringMockPV) EvaluateVrf(blockHash []byte) (error, [32]byte, []byte) {
+	rand := [32]byte{}
+	proof := []byte{}
+	vrfPrivKey, err := p256.NewVRFSignerFromRawKey(pv.privKey.Bytes())
+	if err == nil {
+		rand, proof = vrfPrivKey.Evaluate(blockHash[:])
+	}
+	return err, rand, proof
+}
+
 // NewErroringMockPV returns a MockPV that fails on each signing request. Again, for testing only.
 func NewErroringMockPV() *erroringMockPV {
-	return &erroringMockPV{&MockPV{ed25519.GenPrivKey(), false, false}}
+	vrfPrivKey, _ := p256.GenerateKey()
+	return &erroringMockPV{&MockPV{ed25519.GenPrivKey(), vrfPrivKey, false, false}}
 }

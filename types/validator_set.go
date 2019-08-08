@@ -282,6 +282,19 @@ func (vals *ValidatorSet) TotalVotingPower() int64 {
 	return vals.totalVotingPower
 }
 
+func (vals *ValidatorSet) SetProposerByAddress(proposerAddress []byte) *Validator {
+	var proposer *Validator
+	for _, val := range vals.Validators {
+		if bytes.Equal(val.Address, proposerAddress) {
+			proposer = val
+			vals.Proposer = proposer
+			break
+		}
+	}
+
+	return proposer
+}
+
 // GetProposer returns the current proposer. If the validator set is empty, nil
 // is returned.
 func (vals *ValidatorSet) GetProposer() (proposer *Validator) {
