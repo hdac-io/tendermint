@@ -3,6 +3,8 @@ package cryptoAmino
 import (
 	"reflect"
 
+	"github.com/tendermint/tendermint/crypto/bls"
+
 	amino "github.com/tendermint/go-amino"
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/crypto/ed25519"
@@ -16,7 +18,7 @@ var cdc = amino.NewCodec()
 // to their registered amino names. This should eventually be handled
 // by amino. Example usage:
 // nameTable[reflect.TypeOf(ed25519.PubKeyEd25519{})] = ed25519.PubKeyAminoName
-var nameTable = make(map[reflect.Type]string, 3)
+var nameTable = make(map[reflect.Type]string, 4)
 
 func init() {
 	// NOTE: It's important that there be no conflicts here,
@@ -32,6 +34,7 @@ func init() {
 	nameTable[reflect.TypeOf(ed25519.PubKeyEd25519{})] = ed25519.PubKeyAminoName
 	nameTable[reflect.TypeOf(secp256k1.PubKeySecp256k1{})] = secp256k1.PubKeyAminoName
 	nameTable[reflect.TypeOf(multisig.PubKeyMultisigThreshold{})] = multisig.PubKeyMultisigThresholdAminoRoute
+	nameTable[reflect.TypeOf(bls.PubKeyBls{})] = bls.PubKeyAminoName
 }
 
 // PubkeyAminoName returns the amino route of a pubkey
@@ -52,12 +55,16 @@ func RegisterAmino(cdc *amino.Codec) {
 		secp256k1.PubKeyAminoName, nil)
 	cdc.RegisterConcrete(multisig.PubKeyMultisigThreshold{},
 		multisig.PubKeyMultisigThresholdAminoRoute, nil)
+	cdc.RegisterConcrete(bls.PubKeyBls{},
+		bls.PubKeyAminoName, nil)
 
 	cdc.RegisterInterface((*crypto.PrivKey)(nil), nil)
 	cdc.RegisterConcrete(ed25519.PrivKeyEd25519{},
 		ed25519.PrivKeyAminoName, nil)
 	cdc.RegisterConcrete(secp256k1.PrivKeySecp256k1{},
 		secp256k1.PrivKeyAminoName, nil)
+	cdc.RegisterConcrete(bls.PrivKeyBls{},
+		bls.PrivKeyAminoName, nil)
 }
 
 func PrivKeyFromBytes(privKeyBytes []byte) (privKey crypto.PrivKey, err error) {

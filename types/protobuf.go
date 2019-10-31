@@ -7,6 +7,7 @@ import (
 
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/crypto"
+	"github.com/tendermint/tendermint/crypto/bls"
 	"github.com/tendermint/tendermint/crypto/ed25519"
 	"github.com/tendermint/tendermint/crypto/secp256k1"
 )
@@ -22,12 +23,14 @@ const (
 const (
 	ABCIPubKeyTypeEd25519   = "ed25519"
 	ABCIPubKeyTypeSecp256k1 = "secp256k1"
+	ABCIPubKeyTypeBLS       = "bls"
 )
 
 // TODO: Make non-global by allowing for registration of more pubkey types
 var ABCIPubKeyTypesToAminoNames = map[string]string{
 	ABCIPubKeyTypeEd25519:   ed25519.PubKeyAminoName,
 	ABCIPubKeyTypeSecp256k1: secp256k1.PubKeyAminoName,
+	ABCIPubKeyTypeBLS:       bls.PubKeyAminoName,
 }
 
 //-------------------------------------------------------
@@ -108,6 +111,12 @@ func (tm2pb) PubKey(pubKey crypto.PubKey) abci.PubKey {
 		return abci.PubKey{
 			Type: ABCIPubKeyTypeSecp256k1,
 			Data: pk[:],
+		}
+	case bls.PubKeyBls:
+		marshaled := pk.Bytes()
+		return abci.PubKey{
+			Type: ABCIPubKeyTypeBLS,
+			Data: marshaled,
 		}
 	default:
 		panic(fmt.Sprintf("unknown pubkey type: %v %v", pubKey, reflect.TypeOf(pubKey)))
@@ -203,6 +212,13 @@ func (pb2tm) PubKey(pubKey abci.PubKey) (crypto.PubKey, error) {
 		}
 		var pk secp256k1.PubKeySecp256k1
 		copy(pk[:], pubKey.Data)
+		return pk, nil
+	case ABCIPubKeyTypeBLS:
+		var pk bls.PubKeyBls
+		if err := cdc.UnmarshalBinaryBare(pubKey.Data, &pk); err != nil {
+			return nil, err
+		}
+
 		return pk, nil
 	default:
 		return nil, fmt.Errorf("Unknown pubkey type %v", pubKey.Type)

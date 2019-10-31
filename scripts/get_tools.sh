@@ -48,6 +48,27 @@ installFromGithub() {
 	echo ""
 }
 
+
+makeInstallFromGithub() {
+	repo=$1
+	commit=$2
+	# optional
+	optionalEnv=$3
+
+	echo "--> Make Installing $repo ($commit)..."
+	if [ ! -d "$repo" ]; then
+		mkdir -p "$repo"
+		git clone "https://github.com/$repo.git" "$repo"
+	fi
+	pushd "$repo" && \
+		git fetch origin && \
+		git checkout -q "$commit" && \
+		make $optionalEnv install && \
+		popd || exit 1
+	echo "--> Done"
+	echo ""
+}
+
 ######################## DEVELOPER TOOLS #####################################
 installFromGithub gogo/protobuf 61dbc136cf5d2f08d68a011382652244990a53a9 protoc-gen-gogo
 
@@ -64,3 +85,15 @@ installFromGithub golangci/golangci-lint 7b2421d55194c9dc385eff7720a037aa9244ca3
 installFromGithub petermattis/goid b0b1615b78e5ee59739545bb38426383b2cda4c9
 installFromGithub sasha-s/go-deadlock d68e2bc52ae3291765881b9056f2c1527f245f1e
 go get golang.org/x/tools/cmd/goimports
+
+# used to bls-signature
+#Don't use GMP, because it cause need to GPL License : https://github.com/herumi/bls/issues/19
+makeInstallFromGithub herumi/mcl 0dfad750693baa7fc89c06c4278972ac11aecf72 MCL_USE_GMP=0
+makeInstallFromGithub herumi/bls 607fd587494f75edd7239b132fee172f0dbcd86a
+
+# If Mac environment, OpenSSL installation path is different
+CHECK_OS="`uname -s`"
+if [[ "$CHECK_OS" = "Darwin"* ]]; then
+	macCryptoLIBPath=/usr/local/opt/openssl/lib
+	cp -a $macCryptoLIBPath/libcrypto.a /usr/local/lib/
+fi

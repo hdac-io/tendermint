@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io/ioutil"
 
+	"github.com/tendermint/tendermint/crypto/bls"
+
 	"github.com/tendermint/tendermint/crypto"
-	"github.com/tendermint/tendermint/crypto/ed25519"
+
 	cmn "github.com/tendermint/tendermint/libs/common"
 )
 
@@ -71,7 +73,7 @@ func LoadNodeKey(filePath string) (*NodeKey, error) {
 }
 
 func genNodeKey(filePath string) (*NodeKey, error) {
-	privKey := ed25519.GenPrivKey()
+	privKey, _ := bls.GenerateKey()
 	nodeKey := &NodeKey{
 		PrivKey: privKey,
 	}
