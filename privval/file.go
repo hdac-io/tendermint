@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/hdac-io/tendermint/crypto"
-	"github.com/hdac-io/tendermint/crypto/ed25519"
+	"github.com/hdac-io/tendermint/crypto/bls"
 	cmn "github.com/hdac-io/tendermint/libs/common"
 	"github.com/hdac-io/tendermint/types"
 	tmtime "github.com/hdac-io/tendermint/types/time"
@@ -142,7 +142,7 @@ type FilePV struct {
 // GenFilePV generates a new validator with randomly generated private key
 // and sets the filePaths, but does not call Save().
 func GenFilePV(keyFilePath, stateFilePath string) *FilePV {
-	privKey := ed25519.GenPrivKey()
+	privKey := bls.GenPrivKey()
 
 	return &FilePV{
 		Key: FilePVKey{

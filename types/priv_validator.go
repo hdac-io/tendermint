@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/hdac-io/tendermint/crypto"
-	"github.com/hdac-io/tendermint/crypto/ed25519"
+	"github.com/hdac-io/tendermint/crypto/bls"
 )
 
 // PrivValidator defines the functionality of a local Tendermint validator
@@ -50,7 +50,7 @@ type MockPV struct {
 }
 
 func NewMockPV() *MockPV {
-	return &MockPV{ed25519.GenPrivKey(), false, false}
+	return &MockPV{bls.GenPrivKey(), false, false}
 }
 
 // NewMockPVWithParams allows one to create a MockPV instance, but with finer
@@ -125,5 +125,5 @@ func (pv *erroringMockPV) SignProposal(chainID string, proposal *Proposal) error
 
 // NewErroringMockPV returns a MockPV that fails on each signing request. Again, for testing only.
 func NewErroringMockPV() *erroringMockPV {
-	return &erroringMockPV{&MockPV{ed25519.GenPrivKey(), false, false}}
+	return &erroringMockPV{&MockPV{bls.GenPrivKey(), false, false}}
 }

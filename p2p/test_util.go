@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/hdac-io/tendermint/crypto"
-	"github.com/hdac-io/tendermint/crypto/ed25519"
+	"github.com/hdac-io/tendermint/crypto/bls"
 	cmn "github.com/hdac-io/tendermint/libs/common"
 	"github.com/hdac-io/tendermint/libs/log"
 
@@ -174,7 +174,7 @@ func MakeSwitch(
 ) *Switch {
 
 	nodeKey := NodeKey{
-		PrivKey: ed25519.GenPrivKey(),
+		PrivKey: bls.GenPrivKey(),
 	}
 	nodeInfo := testNodeInfo(nodeKey.ID(), fmt.Sprintf("node%d", i))
 	addr, err := NewNetAddressString(

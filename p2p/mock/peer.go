@@ -3,7 +3,7 @@ package mock
 import (
 	"net"
 
-	"github.com/hdac-io/tendermint/crypto/ed25519"
+	"github.com/hdac-io/tendermint/crypto/bls"
 	cmn "github.com/hdac-io/tendermint/libs/common"
 	"github.com/hdac-io/tendermint/p2p"
 	"github.com/hdac-io/tendermint/p2p/conn"
@@ -27,7 +27,7 @@ func NewPeer(ip net.IP) *Peer {
 	} else {
 		netAddr = p2p.NewNetAddressIPPort(ip, 26656)
 	}
-	nodeKey := p2p.NodeKey{PrivKey: ed25519.GenPrivKey()}
+	nodeKey := p2p.NodeKey{PrivKey: bls.GenPrivKey()}
 	netAddr.ID = nodeKey.ID()
 	mp := &Peer{
 		ip:   ip,

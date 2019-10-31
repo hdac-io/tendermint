@@ -82,9 +82,9 @@ func DefaultEvidenceParams() EvidenceParams {
 }
 
 // DefaultValidatorParams returns a default ValidatorParams, which allows
-// only ed25519 pubkeys.
+// only bls pubkeys.
 func DefaultValidatorParams() ValidatorParams {
-	return ValidatorParams{[]string{ABCIPubKeyTypeEd25519}}
+	return ValidatorParams{[]string{ABCIPubKeyTypeBLS}}
 }
 
 func (params *ValidatorParams) IsValidPubkeyType(pubkeyType string) bool {

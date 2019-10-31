@@ -7,9 +7,9 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/hdac-io/tendermint/crypto/bls"
 	"github.com/hdac-io/tendermint/crypto/tmhash"
 
-	"github.com/hdac-io/tendermint/crypto/ed25519"
 	"github.com/hdac-io/tendermint/privval"
 	"github.com/hdac-io/tendermint/state"
 
@@ -71,7 +71,7 @@ type TestHarnessConfig struct {
 	ConnDeadline   time.Duration
 	AcceptRetries  int
 
-	SecretConnKey ed25519.PrivKeyEd25519
+	SecretConnKey bls.PrivKeyBls
 
 	ExitWhenComplete bool // Whether or not to call os.Exit when the harness has completed.
 }
