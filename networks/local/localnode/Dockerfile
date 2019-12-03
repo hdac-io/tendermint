@@ -1,9 +1,9 @@
-FROM alpine:3.7
+FROM frolvlad/alpine-glibc:alpine-3.7_glibc-2.26
 MAINTAINER Greg Szabo <greg@tendermint.com>
 
 RUN apk update && \
     apk upgrade && \
-    apk --no-cache add curl jq file
+    apk --no-cache add curl jq file libstdc++
 
 VOLUME [ /tendermint ]
 WORKDIR /tendermint
