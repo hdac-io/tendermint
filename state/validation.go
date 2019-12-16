@@ -157,6 +157,20 @@ func validateBlock(evidencePool EvidencePool, stateDB dbm.DB, state State, block
 		)
 	}
 
+	if state.LastBlockHeight > 1 {
+		_, proposer := state.Validators.GetByAddress(block.Data.VrfMessage.ProposerAddress)
+		if proposer == nil {
+			return fmt.Errorf("Invalid vrf proposer address")
+		}
+
+		if verifier := proposer.PubKey.GetVrfVerifier(); verifier != nil {
+			proofRand, err := verifier.ProofToHash(state.LastBlockID.Hash.Bytes(), block.Data.VrfMessage.Proof)
+			if err != nil || proofRand != block.Data.VrfMessage.Rand {
+				return fmt.Errorf("Verify failed VRF message into block")
+			}
+		}
+	}
+
 	return nil
 }
 
