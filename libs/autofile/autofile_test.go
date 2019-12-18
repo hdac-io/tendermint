@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	cmn "github.com/tendermint/tendermint/libs/common"
+	cmn "github.com/hdac-io/tendermint/libs/common"
 )
 
 func TestSIGHUP(t *testing.T) {

@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/tendermint/tendermint/crypto/ed25519"
-	cmn "github.com/tendermint/tendermint/libs/common"
-	p2pconn "github.com/tendermint/tendermint/p2p/conn"
+	"github.com/hdac-io/tendermint/crypto/ed25519"
+	cmn "github.com/hdac-io/tendermint/libs/common"
+	p2pconn "github.com/hdac-io/tendermint/p2p/conn"
 )
 
 // Socket errors.

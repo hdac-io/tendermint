@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"fmt"
 
-	abci "github.com/tendermint/tendermint/abci/types"
-	"github.com/tendermint/tendermint/crypto"
-	"github.com/tendermint/tendermint/crypto/ed25519"
-	"github.com/tendermint/tendermint/proxy"
-	sm "github.com/tendermint/tendermint/state"
-	"github.com/tendermint/tendermint/types"
-	tmtime "github.com/tendermint/tendermint/types/time"
+	abci "github.com/hdac-io/tendermint/abci/types"
+	"github.com/hdac-io/tendermint/crypto"
+	"github.com/hdac-io/tendermint/crypto/ed25519"
+	"github.com/hdac-io/tendermint/proxy"
+	sm "github.com/hdac-io/tendermint/state"
+	"github.com/hdac-io/tendermint/types"
+	tmtime "github.com/hdac-io/tendermint/types/time"
 	dbm "github.com/tendermint/tm-db"
 )
 

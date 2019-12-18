@@ -4,12 +4,12 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	cfg "github.com/tendermint/tendermint/config"
-	cmn "github.com/tendermint/tendermint/libs/common"
-	"github.com/tendermint/tendermint/p2p"
-	"github.com/tendermint/tendermint/privval"
-	"github.com/tendermint/tendermint/types"
-	tmtime "github.com/tendermint/tendermint/types/time"
+	cfg "github.com/hdac-io/tendermint/config"
+	cmn "github.com/hdac-io/tendermint/libs/common"
+	"github.com/hdac-io/tendermint/p2p"
+	"github.com/hdac-io/tendermint/privval"
+	"github.com/hdac-io/tendermint/types"
+	tmtime "github.com/hdac-io/tendermint/types/time"
 )
 
 // InitFilesCmd initialises a fresh Tendermint Core instance.

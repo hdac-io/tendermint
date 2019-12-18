@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tendermint/tendermint/crypto/ed25519"
-	cmn "github.com/tendermint/tendermint/libs/common"
-	"github.com/tendermint/tendermint/libs/log"
-	"github.com/tendermint/tendermint/types"
+	"github.com/hdac-io/tendermint/crypto/ed25519"
+	cmn "github.com/hdac-io/tendermint/libs/common"
+	"github.com/hdac-io/tendermint/libs/log"
+	"github.com/hdac-io/tendermint/types"
 )
 
 var (

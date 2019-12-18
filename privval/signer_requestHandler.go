@@ -3,8 +3,8 @@ package privval
 import (
 	"fmt"
 
-	"github.com/tendermint/tendermint/crypto"
-	"github.com/tendermint/tendermint/types"
+	"github.com/hdac-io/tendermint/crypto"
+	"github.com/hdac-io/tendermint/types"
 )
 
 func DefaultValidationRequestHandler(privVal types.PrivValidator, req SignerMessage, chainID string) (SignerMessage, error) {

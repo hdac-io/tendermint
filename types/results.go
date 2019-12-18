@@ -1,9 +1,9 @@
 package types
 
 import (
-	abci "github.com/tendermint/tendermint/abci/types"
-	"github.com/tendermint/tendermint/crypto/merkle"
-	cmn "github.com/tendermint/tendermint/libs/common"
+	abci "github.com/hdac-io/tendermint/abci/types"
+	"github.com/hdac-io/tendermint/crypto/merkle"
+	cmn "github.com/hdac-io/tendermint/libs/common"
 )
 
 //-----------------------------------------------------------------------------

@@ -8,11 +8,11 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	abci "github.com/tendermint/tendermint/abci/types"
-	cmn "github.com/tendermint/tendermint/libs/common"
-	"github.com/tendermint/tendermint/rpc/client"
-	ctypes "github.com/tendermint/tendermint/rpc/core/types"
-	"github.com/tendermint/tendermint/types"
+	abci "github.com/hdac-io/tendermint/abci/types"
+	cmn "github.com/hdac-io/tendermint/libs/common"
+	"github.com/hdac-io/tendermint/rpc/client"
+	ctypes "github.com/hdac-io/tendermint/rpc/core/types"
+	"github.com/hdac-io/tendermint/types"
 )
 
 var waitForEventTimeout = 5 * time.Second

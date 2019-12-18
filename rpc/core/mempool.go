@@ -7,10 +7,10 @@ import (
 
 	"github.com/pkg/errors"
 
-	abci "github.com/tendermint/tendermint/abci/types"
-	ctypes "github.com/tendermint/tendermint/rpc/core/types"
-	rpctypes "github.com/tendermint/tendermint/rpc/lib/types"
-	"github.com/tendermint/tendermint/types"
+	abci "github.com/hdac-io/tendermint/abci/types"
+	ctypes "github.com/hdac-io/tendermint/rpc/core/types"
+	rpctypes "github.com/hdac-io/tendermint/rpc/lib/types"
+	"github.com/hdac-io/tendermint/types"
 )
 
 //-----------------------------------------------------------------------------

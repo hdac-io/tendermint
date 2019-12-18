@@ -11,14 +11,14 @@ import (
 
 	"github.com/pkg/errors"
 
-	abci "github.com/tendermint/tendermint/abci/types"
-	cfg "github.com/tendermint/tendermint/config"
-	auto "github.com/tendermint/tendermint/libs/autofile"
-	"github.com/tendermint/tendermint/libs/clist"
-	cmn "github.com/tendermint/tendermint/libs/common"
-	"github.com/tendermint/tendermint/libs/log"
-	"github.com/tendermint/tendermint/proxy"
-	"github.com/tendermint/tendermint/types"
+	abci "github.com/hdac-io/tendermint/abci/types"
+	cfg "github.com/hdac-io/tendermint/config"
+	auto "github.com/hdac-io/tendermint/libs/autofile"
+	"github.com/hdac-io/tendermint/libs/clist"
+	cmn "github.com/hdac-io/tendermint/libs/common"
+	"github.com/hdac-io/tendermint/libs/log"
+	"github.com/hdac-io/tendermint/proxy"
+	"github.com/hdac-io/tendermint/types"
 )
 
 //--------------------------------------------------------------------------------

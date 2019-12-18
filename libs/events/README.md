@@ -1,7 +1,7 @@
 
 
 # events
-`import "github.com/tendermint/tendermint/libs/events"`
+`import "github.com/hdac-io/tendermint/libs/events"`
 
 * [Overview](#pkg-overview)
 * [Index](#pkg-index)

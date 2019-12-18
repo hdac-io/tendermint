@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	cmn "github.com/tendermint/tendermint/libs/common"
-	"github.com/tendermint/tendermint/libs/log"
+	cmn "github.com/hdac-io/tendermint/libs/common"
+	"github.com/hdac-io/tendermint/libs/log"
 )
 
 // SignerValidatorEndpointOption sets an optional parameter on the SocketVal.

@@ -5,11 +5,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/tendermint/tendermint/crypto/ed25519"
-	cmn "github.com/tendermint/tendermint/libs/common"
-	"github.com/tendermint/tendermint/libs/log"
+	"github.com/hdac-io/tendermint/crypto/ed25519"
+	cmn "github.com/hdac-io/tendermint/libs/common"
+	"github.com/hdac-io/tendermint/libs/log"
 
-	"github.com/tendermint/tendermint/privval"
+	"github.com/hdac-io/tendermint/privval"
 )
 
 func main() {

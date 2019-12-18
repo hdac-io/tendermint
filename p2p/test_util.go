@@ -7,13 +7,13 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/tendermint/tendermint/crypto"
-	"github.com/tendermint/tendermint/crypto/ed25519"
-	cmn "github.com/tendermint/tendermint/libs/common"
-	"github.com/tendermint/tendermint/libs/log"
+	"github.com/hdac-io/tendermint/crypto"
+	"github.com/hdac-io/tendermint/crypto/ed25519"
+	cmn "github.com/hdac-io/tendermint/libs/common"
+	"github.com/hdac-io/tendermint/libs/log"
 
-	"github.com/tendermint/tendermint/config"
-	"github.com/tendermint/tendermint/p2p/conn"
+	"github.com/hdac-io/tendermint/config"
+	"github.com/hdac-io/tendermint/p2p/conn"
 )
 
 const testCh = 0x01

@@ -5,9 +5,9 @@ import (
 
 	"github.com/pkg/errors"
 
-	cmn "github.com/tendermint/tendermint/libs/common"
-	lerr "github.com/tendermint/tendermint/lite/errors"
-	"github.com/tendermint/tendermint/types"
+	cmn "github.com/hdac-io/tendermint/libs/common"
+	lerr "github.com/hdac-io/tendermint/lite/errors"
+	"github.com/hdac-io/tendermint/types"
 )
 
 var _ Verifier = (*BaseVerifier)(nil)

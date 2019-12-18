@@ -6,8 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	cmn "github.com/tendermint/tendermint/libs/common"
-	ctest "github.com/tendermint/tendermint/libs/test"
+	cmn "github.com/hdac-io/tendermint/libs/common"
+	ctest "github.com/hdac-io/tendermint/libs/test"
 )
 
 func makeTxs(cnt, size int) Txs {
