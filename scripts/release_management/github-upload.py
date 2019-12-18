@@ -59,7 +59,7 @@ if __name__ == "__main__":
   with open(args.file,'rb') as f:
     asset = f.read()
 
-  result = request('uploads.github.com', '/repos/tendermint/tendermint/releases/{0}/assets?name={1}'.format(args.id, filename), mimetype, mimeencoding, asset)
+  result = request('uploads.github.com', '/repos/hdac-io/tendermint/releases/{0}/assets?name={1}'.format(args.id, filename), mimetype, mimeencoding, asset)
 
   if args.return_id_only:
     print(result['id'])

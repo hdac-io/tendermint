@@ -8,7 +8,7 @@ module.exports = {
     lineNumbers: true
   },
   themeConfig: {
-    repo: "tendermint/tendermint",
+    repo: "hdac-io/tendermint",
     editLinks: true,
     docsDir: "docs",
     docsBranch: "develop",
