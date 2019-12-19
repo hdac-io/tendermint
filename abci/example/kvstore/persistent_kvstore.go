@@ -9,7 +9,7 @@ import (
 
 	"github.com/hdac-io/tendermint/abci/example/code"
 	"github.com/hdac-io/tendermint/abci/types"
-	"github.com/hdac-io/tendermint/crypto/ed25519"
+	"github.com/hdac-io/tendermint/crypto/bls"
 	"github.com/hdac-io/tendermint/libs/log"
 	tmtypes "github.com/hdac-io/tendermint/types"
 	dbm "github.com/tendermint/tm-db"
@@ -168,7 +168,7 @@ func isValidatorTx(tx []byte) bool {
 }
 
 // format is "val:pubkey!power"
-// pubkey is a base64-encoded 32-byte ed25519 key
+// pubkey is a base64-encoded bls key
 func (app *PersistentKVStoreApplication) execValidatorTx(tx []byte) types.ResponseDeliverTx {
 	tx = tx[len(ValidatorSetChangePrefix):]
 
@@ -198,15 +198,19 @@ func (app *PersistentKVStoreApplication) execValidatorTx(tx []byte) types.Respon
 	}
 
 	// update
-	return app.updateValidator(types.Ed25519ValidatorUpdate(pubkey, power))
+	return app.updateValidator(types.BlsValidatorUpdate(pubkey, power))
 }
 
 // add, update, or remove a validator
 func (app *PersistentKVStoreApplication) updateValidator(v types.ValidatorUpdate) types.ResponseDeliverTx {
 	key := []byte("val:" + string(v.PubKey.Data))
 
-	pubkey := ed25519.PubKeyEd25519{}
-	copy(pubkey[:], v.PubKey.Data)
+	var pubkey bls.PubKeyBls
+	if err := cdc.UnmarshalBinaryBare(v.PubKey.Data, &pubkey); err != nil {
+		return types.ResponseDeliverTx{
+			Code: code.CodeTypeUnauthorized,
+			Log:  fmt.Sprintf("Invalid key type. wanted bls")}
+	}
 
 	if v.Power == 0 {
 		// remove validator
