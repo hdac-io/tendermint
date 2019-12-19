@@ -6,15 +6,15 @@ import (
 
 	"github.com/pkg/errors"
 
-	cmn "github.com/tendermint/tendermint/libs/common"
-	"github.com/tendermint/tendermint/libs/log"
-	tmpubsub "github.com/tendermint/tendermint/libs/pubsub"
-	tmquery "github.com/tendermint/tendermint/libs/pubsub/query"
-	nm "github.com/tendermint/tendermint/node"
-	"github.com/tendermint/tendermint/rpc/core"
-	ctypes "github.com/tendermint/tendermint/rpc/core/types"
-	rpctypes "github.com/tendermint/tendermint/rpc/lib/types"
-	"github.com/tendermint/tendermint/types"
+	cmn "github.com/hdac-io/tendermint/libs/common"
+	"github.com/hdac-io/tendermint/libs/log"
+	tmpubsub "github.com/hdac-io/tendermint/libs/pubsub"
+	tmquery "github.com/hdac-io/tendermint/libs/pubsub/query"
+	nm "github.com/hdac-io/tendermint/node"
+	"github.com/hdac-io/tendermint/rpc/core"
+	ctypes "github.com/hdac-io/tendermint/rpc/core/types"
+	rpctypes "github.com/hdac-io/tendermint/rpc/lib/types"
+	"github.com/hdac-io/tendermint/types"
 )
 
 /*

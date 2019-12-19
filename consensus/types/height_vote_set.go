@@ -6,8 +6,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/tendermint/tendermint/p2p"
-	"github.com/tendermint/tendermint/types"
+	"github.com/hdac-io/tendermint/p2p"
+	"github.com/hdac-io/tendermint/types"
 )
 
 type RoundVoteSet struct {

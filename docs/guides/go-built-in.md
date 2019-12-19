@@ -90,7 +90,7 @@ Create a file called `app.go` with the following content:
 package main
 
 import (
-	abcitypes "github.com/tendermint/tendermint/abci/types"
+	abcitypes "github.com/hdac-io/tendermint/abci/types"
 )
 
 type KVStoreApplication struct {}
@@ -336,14 +336,14 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 
-	abci "github.com/tendermint/tendermint/abci/types"
-	cfg "github.com/tendermint/tendermint/config"
-	tmflags "github.com/tendermint/tendermint/libs/cli/flags"
-	"github.com/tendermint/tendermint/libs/log"
-	nm "github.com/tendermint/tendermint/node"
-	"github.com/tendermint/tendermint/p2p"
-	"github.com/tendermint/tendermint/privval"
-	"github.com/tendermint/tendermint/proxy"
+	abci "github.com/hdac-io/tendermint/abci/types"
+	cfg "github.com/hdac-io/tendermint/config"
+	tmflags "github.com/hdac-io/tendermint/libs/cli/flags"
+	"github.com/hdac-io/tendermint/libs/log"
+	nm "github.com/hdac-io/tendermint/node"
+	"github.com/hdac-io/tendermint/p2p"
+	"github.com/hdac-io/tendermint/privval"
+	"github.com/hdac-io/tendermint/proxy"
 )
 
 var configFile string

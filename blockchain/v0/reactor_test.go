@@ -7,19 +7,19 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/tendermint/tendermint/store"
+	"github.com/hdac-io/tendermint/store"
 
 	"github.com/stretchr/testify/assert"
 
-	abci "github.com/tendermint/tendermint/abci/types"
-	cfg "github.com/tendermint/tendermint/config"
-	"github.com/tendermint/tendermint/libs/log"
-	"github.com/tendermint/tendermint/mock"
-	"github.com/tendermint/tendermint/p2p"
-	"github.com/tendermint/tendermint/proxy"
-	sm "github.com/tendermint/tendermint/state"
-	"github.com/tendermint/tendermint/types"
-	tmtime "github.com/tendermint/tendermint/types/time"
+	abci "github.com/hdac-io/tendermint/abci/types"
+	cfg "github.com/hdac-io/tendermint/config"
+	"github.com/hdac-io/tendermint/libs/log"
+	"github.com/hdac-io/tendermint/mock"
+	"github.com/hdac-io/tendermint/p2p"
+	"github.com/hdac-io/tendermint/proxy"
+	sm "github.com/hdac-io/tendermint/state"
+	"github.com/hdac-io/tendermint/types"
+	tmtime "github.com/hdac-io/tendermint/types/time"
 	dbm "github.com/tendermint/tm-db"
 )
 

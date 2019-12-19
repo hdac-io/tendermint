@@ -1,9 +1,9 @@
 package lite
 
 import (
-	log "github.com/tendermint/tendermint/libs/log"
-	lerr "github.com/tendermint/tendermint/lite/errors"
-	"github.com/tendermint/tendermint/types"
+	log "github.com/hdac-io/tendermint/libs/log"
+	lerr "github.com/hdac-io/tendermint/lite/errors"
+	"github.com/hdac-io/tendermint/types"
 )
 
 var _ PersistentProvider = (*multiProvider)(nil)

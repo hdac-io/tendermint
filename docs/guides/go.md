@@ -93,7 +93,7 @@ Create a file called `app.go` with the following content:
 package main
 
 import (
-	abcitypes "github.com/tendermint/tendermint/abci/types"
+	abcitypes "github.com/hdac-io/tendermint/abci/types"
 )
 
 type KVStoreApplication struct {}
@@ -336,8 +336,8 @@ import (
 
 	"github.com/dgraph-io/badger"
 
-	abciserver "github.com/tendermint/tendermint/abci/server"
-	"github.com/tendermint/tendermint/libs/log"
+	abciserver "github.com/hdac-io/tendermint/abci/server"
+	"github.com/hdac-io/tendermint/libs/log"
 )
 
 var socketAddr string

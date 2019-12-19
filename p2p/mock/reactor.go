@@ -1,9 +1,9 @@
 package mock
 
 import (
-	"github.com/tendermint/tendermint/libs/log"
-	"github.com/tendermint/tendermint/p2p"
-	"github.com/tendermint/tendermint/p2p/conn"
+	"github.com/hdac-io/tendermint/libs/log"
+	"github.com/hdac-io/tendermint/p2p"
+	"github.com/hdac-io/tendermint/p2p/conn"
 )
 
 type Reactor struct {

@@ -5,8 +5,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/tendermint/tendermint/crypto"
-	"github.com/tendermint/tendermint/types"
+	"github.com/hdac-io/tendermint/crypto"
+	"github.com/hdac-io/tendermint/types"
 )
 
 // SignerClient implements PrivValidator.

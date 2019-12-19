@@ -16,9 +16,9 @@ import (
 	"github.com/pkg/errors"
 
 	amino "github.com/tendermint/go-amino"
-	cmn "github.com/tendermint/tendermint/libs/common"
-	flow "github.com/tendermint/tendermint/libs/flowrate"
-	"github.com/tendermint/tendermint/libs/log"
+	cmn "github.com/hdac-io/tendermint/libs/common"
+	flow "github.com/hdac-io/tendermint/libs/flowrate"
+	"github.com/hdac-io/tendermint/libs/log"
 )
 
 const (

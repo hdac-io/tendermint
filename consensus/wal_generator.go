@@ -11,16 +11,16 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/tendermint/tendermint/abci/example/kvstore"
-	cfg "github.com/tendermint/tendermint/config"
-	cmn "github.com/tendermint/tendermint/libs/common"
-	"github.com/tendermint/tendermint/libs/log"
-	"github.com/tendermint/tendermint/mock"
-	"github.com/tendermint/tendermint/privval"
-	"github.com/tendermint/tendermint/proxy"
-	sm "github.com/tendermint/tendermint/state"
-	"github.com/tendermint/tendermint/store"
-	"github.com/tendermint/tendermint/types"
+	"github.com/hdac-io/tendermint/abci/example/kvstore"
+	cfg "github.com/hdac-io/tendermint/config"
+	cmn "github.com/hdac-io/tendermint/libs/common"
+	"github.com/hdac-io/tendermint/libs/log"
+	"github.com/hdac-io/tendermint/mock"
+	"github.com/hdac-io/tendermint/privval"
+	"github.com/hdac-io/tendermint/proxy"
+	sm "github.com/hdac-io/tendermint/state"
+	"github.com/hdac-io/tendermint/store"
+	"github.com/hdac-io/tendermint/types"
 	db "github.com/tendermint/tm-db"
 )
 
