@@ -4,10 +4,10 @@ import (
 	"net"
 	"time"
 
-	"github.com/pkg/errors"
-	"github.com/hdac-io/tendermint/crypto/ed25519"
+	"github.com/hdac-io/tendermint/crypto/bls"
 	cmn "github.com/hdac-io/tendermint/libs/common"
 	p2pconn "github.com/hdac-io/tendermint/p2p/conn"
+	"github.com/pkg/errors"
 )
 
 // Socket errors.
@@ -20,7 +20,7 @@ type SocketDialer func() (net.Conn, error)
 
 // DialTCPFn dials the given tcp addr, using the given timeoutReadWrite and
 // privKey for the authenticated encryption handshake.
-func DialTCPFn(addr string, timeoutReadWrite time.Duration, privKey ed25519.PrivKeyEd25519) SocketDialer {
+func DialTCPFn(addr string, timeoutReadWrite time.Duration, privKey bls.PrivKeyBls) SocketDialer {
 	return func() (net.Conn, error) {
 		conn, err := cmn.Connect(addr)
 		if err == nil {

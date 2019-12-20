@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hdac-io/tendermint/crypto/ed25519"
+	"github.com/hdac-io/tendermint/crypto/bls"
 )
 
 //-------------------------------------------
 // helper funcs
 
-func newPrivKey() ed25519.PrivKeyEd25519 {
-	return ed25519.GenPrivKey()
+func newPrivKey() bls.PrivKeyBls {
+	return bls.GenPrivKey()
 }
 
 //-------------------------------------------

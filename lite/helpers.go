@@ -2,7 +2,7 @@ package lite
 
 import (
 	"github.com/hdac-io/tendermint/crypto"
-	"github.com/hdac-io/tendermint/crypto/ed25519"
+	"github.com/hdac-io/tendermint/crypto/bls"
 	"github.com/hdac-io/tendermint/crypto/secp256k1"
 
 	"github.com/hdac-io/tendermint/types"
@@ -22,7 +22,7 @@ type privKeys []crypto.PrivKey
 func genPrivKeys(n int) privKeys {
 	res := make(privKeys, n)
 	for i := range res {
-		res[i] = ed25519.GenPrivKey()
+		res[i] = bls.GenPrivKey()
 	}
 	return res
 }
@@ -31,7 +31,7 @@ func genPrivKeys(n int) privKeys {
 func (pkz privKeys) Change(i int) privKeys {
 	res := make(privKeys, len(pkz))
 	copy(res, pkz)
-	res[i] = ed25519.GenPrivKey()
+	res[i] = bls.GenPrivKey()
 	return res
 }
 

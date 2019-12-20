@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 
 	"github.com/hdac-io/tendermint/crypto"
-	"github.com/hdac-io/tendermint/crypto/ed25519"
+	"github.com/hdac-io/tendermint/crypto/bls"
 	cmn "github.com/hdac-io/tendermint/libs/common"
 )
 
@@ -71,9 +71,8 @@ func LoadNodeKey(filePath string) (*NodeKey, error) {
 }
 
 func genNodeKey(filePath string) (*NodeKey, error) {
-	privKey := ed25519.GenPrivKey()
 	nodeKey := &NodeKey{
-		PrivKey: privKey,
+		PrivKey: bls.GenPrivKey(),
 	}
 
 	jsonBytes, err := cdc.MarshalJSON(nodeKey)

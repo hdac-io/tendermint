@@ -21,7 +21,7 @@ import (
 	"golang.org/x/crypto/nacl/box"
 
 	"github.com/hdac-io/tendermint/crypto"
-	"github.com/hdac-io/tendermint/crypto/ed25519"
+	"github.com/hdac-io/tendermint/crypto/bls"
 	cmn "github.com/hdac-io/tendermint/libs/common"
 )
 
@@ -135,8 +135,8 @@ func MakeSecretConnection(conn io.ReadWriteCloser, locPrivKey crypto.PrivKey) (*
 
 	remPubKey, remSignature := authSigMsg.Key, authSigMsg.Sig
 
-	if _, ok := remPubKey.(ed25519.PubKeyEd25519); !ok {
-		return nil, errors.Errorf("expected ed25519 pubkey, got %T", remPubKey)
+	if _, ok := remPubKey.(bls.PubKeyBls); !ok {
+		return nil, errors.Errorf("expected bls12-381 pubkey, got %T", remPubKey)
 	}
 
 	if !remPubKey.VerifyBytes(challenge[:], remSignature) {
