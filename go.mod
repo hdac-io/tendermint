@@ -13,8 +13,8 @@ require (
 	github.com/golang/protobuf v1.3.2
 	github.com/google/gofuzz v1.0.0 // indirect
 	github.com/gorilla/websocket v1.4.1
+	github.com/hdac-io/bls-go-binary v0.0.0-20191223054157-fad152e9a679
 	github.com/hdac-io/btcutil v0.0.0-20191220081549-27e3c0391404
-	github.com/herumi/bls-go-binary v0.0.0-20191119080710-898950e1a520
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/karalabe/xgo v0.0.0-20191115072854-c5ccff8648a7 // indirect
 	github.com/libp2p/go-buffer-pool v0.0.2
