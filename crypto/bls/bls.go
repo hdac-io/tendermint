@@ -5,7 +5,7 @@ import (
 
 	"github.com/hdac-io/tendermint/crypto"
 	"github.com/hdac-io/tendermint/crypto/tmhash"
-	herumi "github.com/herumi/bls-go-binary/bls"
+	herumi "github.com/hdac-io/bls-go-binary/bls"
 )
 
 // PrivKeyBls Wrap to herumi bls for tendermint crypto.PrivKey
