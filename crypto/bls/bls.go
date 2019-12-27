@@ -57,7 +57,14 @@ func (privKey PrivKeyBls) PubKey() crypto.PubKey {
 }
 
 func (privKey PrivKeyBls) Equals(rhs crypto.PrivKey) bool {
-	return privKey.IsEqual(&(rhs.(*PrivKeyBls).SecretKey))
+	switch rhs.(type) {
+	case PrivKeyBls:
+		sec := rhs.(PrivKeyBls).SecretKey
+		return privKey.IsEqual(&sec)
+
+	default:
+		return false
+	}
 }
 
 // MarshalAmino implement raw deep copy without json tag based default encode
@@ -90,5 +97,12 @@ func (pubKey PubKeyBls) VerifyBytes(msg []byte, sig []byte) bool {
 }
 
 func (pubKey PubKeyBls) Equals(rhs crypto.PubKey) bool {
-	return pubKey.IsEqual(&(rhs.(*PubKeyBls).PublicKey))
+	switch rhs.(type) {
+	case PubKeyBls:
+		pub := rhs.(PubKeyBls).PublicKey
+		return pubKey.IsEqual(&pub)
+
+	default:
+		return false
+	}
 }
