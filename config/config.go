@@ -688,6 +688,7 @@ func (cfg *MempoolConfig) ValidateBasic() error {
 	if cfg.MaxTxBytes < 0 {
 		return errors.New("max_tx_bytes can't be negative")
 	}
+
 	return nil
 }
 
@@ -696,13 +697,15 @@ func (cfg *MempoolConfig) ValidateBasic() error {
 
 // FastSyncConfig defines the configuration for the Tendermint fast sync service
 type FastSyncConfig struct {
-	Version string `mapstructure:"version"`
+	Version     string `mapstructure:"version"`
+	PoolVersion string `mapstructure:"pool_version"`
 }
 
 // DefaultFastSyncConfig returns a default configuration for the fast sync service
 func DefaultFastSyncConfig() *FastSyncConfig {
 	return &FastSyncConfig{
-		Version: "v0",
+		Version:     "v0",
+		PoolVersion: "tendermint",
 	}
 }
 
@@ -713,14 +716,22 @@ func TestFastSyncConfig() *FastSyncConfig {
 
 // ValidateBasic performs basic validation.
 func (cfg *FastSyncConfig) ValidateBasic() error {
+	var err error
 	switch cfg.Version {
 	case "v0":
-		return nil
 	case "v1":
-		return nil
 	default:
-		return fmt.Errorf("unknown fastsync version %s", cfg.Version)
+		err = fmt.Errorf("unknown fastsync version %s", cfg.Version)
 	}
+
+	switch cfg.PoolVersion {
+	case "tendermint":
+	case "friday":
+	default:
+		err = fmt.Errorf("unknown fastsync pool version %s", cfg.PoolVersion)
+	}
+
+	return err
 }
 
 //-----------------------------------------------------------------------------

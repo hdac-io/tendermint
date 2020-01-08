@@ -59,10 +59,11 @@ type BlockchainReactor struct {
 
 	// immutable
 	initialState sm.State
+	latestState  sm.State
 
 	blockExec *sm.BlockExecutor
 	store     *store.BlockStore
-	pool      *BlockPool
+	pool      IBlockPool
 	fastSync  bool
 
 	requestsCh <-chan BlockRequest
@@ -71,7 +72,7 @@ type BlockchainReactor struct {
 
 // NewBlockchainReactor returns new reactor instance.
 func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *store.BlockStore,
-	fastSync bool) *BlockchainReactor {
+	fastSync bool, poolVersion string) *BlockchainReactor {
 
 	if state.LastBlockHeight != store.Height() {
 		panic(fmt.Sprintf("state (%v) and store (%v) height mismatch", state.LastBlockHeight,
@@ -83,21 +84,41 @@ func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *st
 	const capacity = 1000                      // must be bigger than peers count
 	errorsCh := make(chan peerError, capacity) // so we don't block in #Receive#pool.AddBlock
 
-	pool := NewBlockPool(
-		store.Height()+1,
-		requestsCh,
-		errorsCh,
-	)
-
 	bcR := &BlockchainReactor{
 		initialState: state,
+		latestState:  state,
 		blockExec:    blockExec,
 		store:        store,
-		pool:         pool,
 		fastSync:     fastSync,
 		requestsCh:   requestsCh,
 		errorsCh:     errorsCh,
 	}
+
+	//lazy initialize pool field because of setup to friday ulb length handler
+	var pool IBlockPool
+	switch poolVersion {
+	case "tendermint":
+		pool = NewBlockPool(
+			store.Height()+1,
+			requestsCh,
+			errorsCh,
+		)
+
+	case "friday":
+		pool = NewFridayBlockPool(
+			store.Height()+1,
+			requestsCh,
+			errorsCh,
+			func() int64 {
+				return bcR.latestState.ConsensusParams.Block.LenULB
+			},
+		)
+
+	default:
+		panic(fmt.Sprintf("unknown pool version %s", poolVersion))
+	}
+	bcR.pool = pool
+
 	bcR.BaseReactor = *p2p.NewBaseReactor("BlockchainReactor", bcR)
 	return bcR
 }
@@ -105,7 +126,7 @@ func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *st
 // SetLogger implements cmn.Service by setting the logger on reactor and pool.
 func (bcR *BlockchainReactor) SetLogger(l log.Logger) {
 	bcR.BaseService.Logger = l
-	bcR.pool.Logger = l
+	bcR.pool.SetLogger(l)
 }
 
 // OnStart implements cmn.Service.
@@ -343,11 +364,12 @@ FOR_LOOP:
 					// TODO This is bad, are we zombie?
 					panic(fmt.Sprintf("Failed to process committed block (%d:%X): %v", first.Height, first.Hash(), err))
 				}
+				bcR.latestState = state
 				blocksSynced++
 
 				if blocksSynced%100 == 0 {
 					lastRate = 0.9*lastRate + 0.1*(100/time.Since(lastHundred).Seconds())
-					bcR.Logger.Info("Fast Sync Rate", "height", bcR.pool.height,
+					bcR.Logger.Info("Fast Sync Rate", "height", bcR.pool.GetHeight(),
 						"max_peer_height", bcR.pool.MaxPeerHeight(), "blocks/s", lastRate)
 					lastHundred = time.Now()
 				}
