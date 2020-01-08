@@ -67,6 +67,20 @@ type evidencePool interface {
 	AddEvidence(types.Evidence) error
 }
 
+type IConsensusState interface {
+	cmn.Service
+
+	//required from rpc query
+	GetState() sm.State
+	GetValidators() (int64, []*types.Validator)
+	SetPrivValidator(priv types.PrivValidator)
+	GetLastHeight() int64
+	GetRoundStateJSON() ([]byte, error)
+	GetRoundStateSimpleJSON() ([]byte, error)
+
+	SetEventBus(b *types.EventBus)
+}
+
 // ConsensusState handles execution of the consensus algorithm.
 // It processes votes and proposals, and upon reaching agreement,
 // commits blocks to the chain and executes them against the application.

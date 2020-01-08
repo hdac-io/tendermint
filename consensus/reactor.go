@@ -33,6 +33,13 @@ const (
 
 //-----------------------------------------------------------------------------
 
+type IConsensusReactor interface {
+	p2p.Reactor
+
+	SetEventBus(b *types.EventBus)
+	FastSync() bool
+}
+
 // ConsensusReactor defines a reactor for the consensus service.
 type ConsensusReactor struct {
 	p2p.BaseReactor // BaseService + p2p.Switch
