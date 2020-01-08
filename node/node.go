@@ -23,6 +23,7 @@ import (
 	cfg "github.com/hdac-io/tendermint/config"
 	"github.com/hdac-io/tendermint/consensus"
 	cs "github.com/hdac-io/tendermint/consensus"
+	fridaycs "github.com/hdac-io/tendermint/consensus/friday"
 	"github.com/hdac-io/tendermint/crypto"
 	"github.com/hdac-io/tendermint/evidence"
 	cmn "github.com/hdac-io/tendermint/libs/common"
@@ -191,8 +192,8 @@ type Node struct {
 	bcReactor        p2p.Reactor       // for fast-syncing
 	mempoolReactor   *mempl.Reactor    // for gossipping transactions
 	mempool          mempl.Mempool
-	consensusState   *cs.ConsensusState     // latest consensus state
-	consensusReactor *cs.ConsensusReactor   // for participating in the consensus
+	consensusState   cs.IConsensusState     // latest consensus state
+	consensusReactor cs.IConsensusReactor   // for participating in the consensus
 	pexReactor       *pex.PEXReactor        // for exchanging peer addresses
 	evidencePool     *evidence.EvidencePool // tracking evidence
 	proxyApp         proxy.AppConns         // connection to the application
@@ -462,7 +463,7 @@ func createSwitch(config *cfg.Config,
 	peerFilters []p2p.PeerFilterFunc,
 	mempoolReactor *mempl.Reactor,
 	bcReactor p2p.Reactor,
-	consensusReactor *consensus.ConsensusReactor,
+	consensusReactor cs.IConsensusReactor,
 	evidenceReactor *evidence.EvidenceReactor,
 	nodeInfo p2p.NodeInfo,
 	nodeKey *p2p.NodeKey,
@@ -973,12 +974,12 @@ func (n *Node) BlockStore() *store.BlockStore {
 }
 
 // ConsensusState returns the Node's ConsensusState.
-func (n *Node) ConsensusState() *cs.ConsensusState {
+func (n *Node) ConsensusState() cs.IConsensusState {
 	return n.consensusState
 }
 
 // ConsensusReactor returns the Node's ConsensusReactor.
-func (n *Node) ConsensusReactor() *cs.ConsensusReactor {
+func (n *Node) ConsensusReactor() cs.IConsensusReactor {
 	return n.consensusReactor
 }
 
