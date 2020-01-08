@@ -48,6 +48,23 @@ const (
 
 var peerTimeout = 15 * time.Second // not const so we can override with tests
 
+// IBlockPool is extreacted from BlockPool, needed select implementation to friday block pool
+type IBlockPool interface {
+	cmn.Service
+
+	GetStatus() (height int64, numPending int32, lenRequesters int)
+	GetHeight() int64
+
+	IsCaughtUp() bool
+	PeekTwoBlocks() (first *types.Block, second *types.Block)
+	PopRequest()
+	RedoRequest(height int64) p2p.ID
+	AddBlock(peerID p2p.ID, block *types.Block, blockSize int)
+	MaxPeerHeight() int64
+	SetPeerHeight(peerID p2p.ID, height int64)
+	RemovePeer(peerID p2p.ID)
+}
+
 /*
 	Peers self report their heights when we join the block pool.
 	Starting from our latest pool.height, we request blocks
@@ -161,6 +178,14 @@ func (pool *BlockPool) GetStatus() (height int64, numPending int32, lenRequester
 	defer pool.mtx.Unlock()
 
 	return pool.height, atomic.LoadInt32(&pool.numPending), len(pool.requesters)
+}
+
+// GetHeight returns pool's height
+func (pool *BlockPool) GetHeight() int64 {
+	pool.mtx.Lock()
+	defer pool.mtx.Unlock()
+
+	return pool.height
 }
 
 // IsCaughtUp returns true if this node is caught up, false - otherwise.
