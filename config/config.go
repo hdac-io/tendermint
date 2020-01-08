@@ -729,6 +729,8 @@ func (cfg *FastSyncConfig) ValidateBasic() error {
 // ConsensusConfig defines the configuration for the Tendermint consensus service,
 // including timeouts and details about the WAL and the block structure.
 type ConsensusConfig struct {
+	Version string `mapstructure:"version"`
+
 	RootDir string `mapstructure:"home"`
 	WalPath string `mapstructure:"wal_file"`
 	walFile string // overrides WalPath if set
@@ -756,6 +758,7 @@ type ConsensusConfig struct {
 // DefaultConsensusConfig returns a default configuration for the consensus service
 func DefaultConsensusConfig() *ConsensusConfig {
 	return &ConsensusConfig{
+		Version:                     "tendermint",
 		WalPath:                     filepath.Join(defaultDataDir, "cs.wal", "wal"),
 		TimeoutPropose:              3000 * time.Millisecond,
 		TimeoutProposeDelta:         500 * time.Millisecond,
@@ -772,6 +775,13 @@ func DefaultConsensusConfig() *ConsensusConfig {
 	}
 }
 
+// DefaultFridayConsensusConfig returns a specialized friday default configuration for the consensus service
+func DefaultFridayConsensusConfig() *ConsensusConfig {
+	cfg := DefaultConsensusConfig()
+	cfg.Version = "friday"
+	return cfg
+}
+
 // TestConsensusConfig returns a configuration for testing the consensus service
 func TestConsensusConfig() *ConsensusConfig {
 	cfg := DefaultConsensusConfig()
@@ -785,6 +795,13 @@ func TestConsensusConfig() *ConsensusConfig {
 	cfg.SkipTimeoutCommit = true
 	cfg.PeerGossipSleepDuration = 5 * time.Millisecond
 	cfg.PeerQueryMaj23SleepDuration = 250 * time.Millisecond
+	return cfg
+}
+
+// TestFridayConsensusConfig returns a configuration for testing the friday consensus service
+func TestFridayConsensusConfig() *ConsensusConfig {
+	cfg := TestConsensusConfig()
+	cfg.Version = "friday"
 	return cfg
 }
 
@@ -835,6 +852,14 @@ func (cfg *ConsensusConfig) SetWalFile(walFile string) {
 // ValidateBasic performs basic validation (checking param bounds, etc.) and
 // returns an error if any check fails.
 func (cfg *ConsensusConfig) ValidateBasic() error {
+
+	switch cfg.Version {
+	case "tendermint":
+	case "friday":
+	default:
+		return errors.New("invalid consensus version")
+	}
+
 	if cfg.TimeoutPropose < 0 {
 		return errors.New("timeout_propose can't be negative")
 	}
