@@ -44,7 +44,7 @@ type PrivKeySecp256k1 [32]byte
 
 // Bytes marshalls the private key using amino encoding.
 func (privKey PrivKeySecp256k1) Bytes() []byte {
-	return cdc.MustMarshalBinaryBare(privKey)
+	return privKey[:]
 }
 
 // PubKey performs the point-scalar multiplication from the privKey on the
@@ -152,11 +152,7 @@ func (pubKey PubKeySecp256k1) Address() crypto.Address {
 
 // Bytes returns the pubkey marshalled with amino encoding.
 func (pubKey PubKeySecp256k1) Bytes() []byte {
-	bz, err := cdc.MarshalBinaryBare(pubKey)
-	if err != nil {
-		panic(err)
-	}
-	return bz
+	return pubKey[:]
 }
 
 func (pubKey PubKeySecp256k1) String() string {
