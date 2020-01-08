@@ -267,14 +267,27 @@ func createAndStartIndexerService(config *cfg.Config, dbProvider DBProvider,
 	return indexerService, txIndexer, nil
 }
 
-func doHandshake(stateDB dbm.DB, state sm.State, blockStore sm.BlockStore,
+func doHandshake(config *cfg.Config, stateDB dbm.DB, state sm.State, blockStore sm.BlockStore,
 	genDoc *types.GenesisDoc, eventBus *types.EventBus, proxyApp proxy.AppConns, consensusLogger log.Logger) error {
 
-	handshaker := cs.NewHandshaker(stateDB, state, blockStore, genDoc)
-	handshaker.SetLogger(consensusLogger)
-	handshaker.SetEventBus(eventBus)
-	if err := handshaker.Handshake(proxyApp); err != nil {
-		return fmt.Errorf("error during handshake: %v", err)
+	// Handshaker it's only used here. don't abstract.
+	switch config.Consensus.Version {
+	case "tendermint":
+		handshaker := cs.NewHandshaker(stateDB, state, blockStore, genDoc)
+		handshaker.SetLogger(consensusLogger)
+		handshaker.SetEventBus(eventBus)
+		if err := handshaker.Handshake(proxyApp); err != nil {
+			return fmt.Errorf("error during handshake: %v", err)
+		}
+	case "friday":
+		handshaker := fridaycs.NewHandshaker(stateDB, state, blockStore, genDoc)
+		handshaker.SetLogger(consensusLogger)
+		handshaker.SetEventBus(eventBus)
+		if err := handshaker.Handshake(proxyApp); err != nil {
+			return fmt.Errorf("error during handshake: %v", err)
+		}
+	default:
+		return fmt.Errorf("invalid consensus version int doHandshake")
 	}
 	return nil
 }
@@ -378,26 +391,53 @@ func createConsensusReactor(config *cfg.Config,
 	csMetrics *cs.Metrics,
 	fastSync bool,
 	eventBus *types.EventBus,
-	consensusLogger log.Logger) (*consensus.ConsensusReactor, *consensus.ConsensusState) {
+	consensusLogger log.Logger) (consensus.IConsensusReactor, consensus.IConsensusState) {
 
-	consensusState := cs.NewConsensusState(
-		config.Consensus,
-		state.Copy(),
-		blockExec,
-		blockStore,
-		mempool,
-		evidencePool,
-		cs.StateMetrics(csMetrics),
-	)
+	var consensusState consensus.IConsensusState
+	var consensusReactor consensus.IConsensusReactor
+
+	switch config.Consensus.Version {
+	case "tendermint":
+		tmConsensusState := consensus.NewConsensusState(
+			config.Consensus,
+			state.Copy(),
+			blockExec,
+			blockStore,
+			mempool,
+			evidencePool,
+			consensus.StateMetrics(csMetrics),
+		)
+		tmConsensusReactor := consensus.NewConsensusReactor(tmConsensusState, fastSync, consensus.ReactorMetrics(csMetrics))
+		consensusState = tmConsensusState
+		consensusReactor = tmConsensusReactor
+
+	case "friday":
+		fridayConsensusState := fridaycs.NewConsensusState(
+			config.Consensus,
+			state.Copy(),
+			blockExec,
+			blockStore,
+			mempool,
+			evidencePool,
+			fridaycs.StateMetrics(csMetrics),
+		)
+
+		fridayConsensusReactor := fridaycs.NewConsensusReactor(fridayConsensusState, fastSync, fridaycs.ReactorMetrics(csMetrics))
+		consensusState = fridayConsensusState
+		consensusReactor = fridayConsensusReactor
+	default:
+		panic("invalid consensus version in createConsensusReactor")
+	}
+
 	consensusState.SetLogger(consensusLogger)
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
 	}
-	consensusReactor := cs.NewConsensusReactor(consensusState, fastSync, cs.ReactorMetrics(csMetrics))
 	consensusReactor.SetLogger(consensusLogger)
 	// services which will be publishing and/or subscribing for messages (events)
 	// consensusReactor will set it on consensusState and blockExecutor
 	consensusReactor.SetEventBus(eventBus)
+
 	return consensusReactor, consensusState
 }
 
@@ -580,7 +620,7 @@ func NewNode(config *cfg.Config,
 	// Create the handshaker, which calls RequestInfo, sets the AppVersion on the state,
 	// and replays any blocks as necessary to sync tendermint with the app.
 	consensusLogger := logger.With("module", "consensus")
-	if err := doHandshake(stateDB, state, blockStore, genDoc, eventBus, proxyApp, consensusLogger); err != nil {
+	if err := doHandshake(config, stateDB, state, blockStore, genDoc, eventBus, proxyApp, consensusLogger); err != nil {
 		return nil, err
 	}
 
