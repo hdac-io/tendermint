@@ -6,13 +6,13 @@ import (
 	"reflect"
 	"time"
 
-	amino "github.com/tendermint/go-amino"
 	"github.com/hdac-io/tendermint/behaviour"
 	"github.com/hdac-io/tendermint/libs/log"
 	"github.com/hdac-io/tendermint/p2p"
 	sm "github.com/hdac-io/tendermint/state"
 	"github.com/hdac-io/tendermint/store"
 	"github.com/hdac-io/tendermint/types"
+	amino "github.com/tendermint/go-amino"
 )
 
 const (
@@ -100,7 +100,7 @@ func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *st
 		eventsFromFSMCh:  eventsFromFSMCh,
 		errorsForFSMCh:   errorsForFSMCh,
 	}
-	fsm := NewFSM(startHeight, bcR)
+	fsm := NewFSM(startHeight, bcR, poolVersion)
 	bcR.fsm = fsm
 	bcR.BaseReactor = *p2p.NewBaseReactor("BlockchainReactor", bcR)
 	//bcR.swReporter = behaviour.NewSwitcReporter(bcR.BaseReactor.Switch)
@@ -470,6 +470,10 @@ func (bcR *BlockchainReactor) switchToConsensus() {
 	// else {
 	// Should only happen during testing.
 	// }
+}
+
+func (bcR *BlockchainReactor) lenULB() int64 {
+	return bcR.state.ConsensusParams.Block.LenULB
 }
 
 // Implements bcRNotifier
