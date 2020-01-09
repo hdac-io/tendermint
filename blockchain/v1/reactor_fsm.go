@@ -38,20 +38,34 @@ type BcReactorFSM struct {
 
 	state      *bcReactorFSMState
 	stateTimer *time.Timer
-	pool       *BlockPool
+	pool       IBlockPool
 
 	// interface used to call the Blockchain reactor to send StatusRequest, BlockRequest, reporting errors, etc.
 	toBcR bcReactor
 }
 
 // NewFSM creates a new reactor FSM.
-func NewFSM(height int64, toBcR bcReactor) *BcReactorFSM {
-	return &BcReactorFSM{
+func NewFSM(height int64, toBcR bcReactor, version string) *BcReactorFSM {
+
+	fsm := BcReactorFSM{
 		state:     unknown,
 		startTime: time.Now(),
-		pool:      NewBlockPool(height, toBcR),
 		toBcR:     toBcR,
 	}
+
+	var pool IBlockPool
+	switch version {
+	case "tendermint":
+		pool = NewBlockPool(height, toBcR)
+	case "friday":
+		pool = NewFridayBlockPool(height, toBcR, func() int64 {
+			return fsm.toBcR.lenULB()
+		})
+	default:
+		panic(fmt.Sprintf("invalid pool version %s", version))
+	}
+	fsm.pool = pool
+	return &fsm
 }
 
 // bReactorEventData is part of the message sent by the reactor to the FSM and used by the state handlers.
@@ -338,7 +352,7 @@ func init() {
 	finished = &bcReactorFSMState{
 		name: "finished",
 		enter: func(fsm *BcReactorFSM) {
-			fsm.logger.Info("Time to switch to consensus reactor!", "height", fsm.pool.Height)
+			fsm.logger.Info("Time to switch to consensus reactor!", "height", fsm.pool.GetHeight())
 			fsm.toBcR.switchToConsensus()
 			fsm.cleanup()
 		},
@@ -357,6 +371,7 @@ type bcReactor interface {
 	sendPeerError(err error, peerID p2p.ID)
 	resetStateTimer(name string, timer **time.Timer, timeout time.Duration)
 	switchToConsensus()
+	lenULB() int64
 }
 
 // SetLogger sets the FSM logger.
@@ -446,5 +461,5 @@ func (fsm *BcReactorFSM) FirstTwoBlocks() (first, second *types.Block, err error
 func (fsm *BcReactorFSM) Status() (height, maxPeerHeight int64) {
 	fsm.mtx.Lock()
 	defer fsm.mtx.Unlock()
-	return fsm.pool.Height, fsm.pool.MaxPeerHeight
+	return fsm.pool.GetHeight(), fsm.pool.GetMaxPeerHeight()
 }

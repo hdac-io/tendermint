@@ -8,6 +8,27 @@ import (
 	"github.com/hdac-io/tendermint/types"
 )
 
+// IBlockPool is extreacted from BlockPool, needed select implementation to friday block pool
+type IBlockPool interface {
+	GetHeight() int64
+	GetMaxPeerHeight() int64
+
+	SetLogger(l log.Logger)
+	ReachedMaxHeight() bool
+	UpdatePeer(peerID p2p.ID, height int64) error
+	RemovePeer(peerID p2p.ID, err error)
+	MakeNextRequests(maxNumRequests int)
+	AddBlock(peerID p2p.ID, block *types.Block, blockSize int) error
+	BlockAndPeerAtHeight(height int64) (bData *BlockData, err error)
+	FirstTwoBlocksAndPeers() (first, second *BlockData, err error)
+	InvalidateFirstTwoBlocks(err error)
+	ProcessedCurrentHeightBlock()
+	RemovePeerAtCurrentHeights(err error)
+	Cleanup()
+	NumPeers() int
+	NeedsBlocks() bool
+}
+
 // BlockPool keeps track of the fast sync peers, block requests and block responses.
 type BlockPool struct {
 	logger log.Logger
@@ -35,6 +56,14 @@ func NewBlockPool(height int64, toBcR bcReactor) *BlockPool {
 		nextRequestHeight: height,
 		toBcR:             toBcR,
 	}
+}
+
+func (pool *BlockPool) GetHeight() int64 {
+	return pool.Height
+}
+
+func (pool *BlockPool) GetMaxPeerHeight() int64 {
+	return pool.MaxPeerHeight
 }
 
 // SetLogger sets the logger of the pool.
