@@ -57,7 +57,7 @@ func initFilesWithConfig(config *cfg.Config) error {
 		genDoc := types.GenesisDoc{
 			ChainID:         fmt.Sprintf("test-chain-%v", cmn.RandStr(6)),
 			GenesisTime:     tmtime.Now(),
-			ConsensusParams: types.DefaultConsensusParams(),
+			ConsensusParams: types.DefaultFridayConsensusParams(),
 		}
 		key := pv.GetPubKey()
 		genDoc.Validators = []types.GenesisValidator{{

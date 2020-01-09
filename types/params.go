@@ -43,6 +43,9 @@ type BlockParams struct {
 	// Minimum time increment between consecutive blocks (in milliseconds)
 	// Not exposed to the application.
 	TimeIotaMs int64 `json:"time_iota_ms"`
+
+	// LenULB is optional field, it's just using friday consensus
+	LenULB int64 `json:"len_ulb",omitempty`
 }
 
 // EvidenceParams determine how we handle evidence of malfeasance.
@@ -65,6 +68,15 @@ func DefaultConsensusParams() *ConsensusParams {
 	}
 }
 
+// DefaultFridayConsensusParams returns a specialized friday ConsensusParams.
+func DefaultFridayConsensusParams() *ConsensusParams {
+	return &ConsensusParams{
+		DefaultFridayBlockParams(),
+		DefaultEvidenceParams(),
+		DefaultValidatorParams(),
+	}
+}
+
 // DefaultBlockParams returns a default BlockParams.
 func DefaultBlockParams() BlockParams {
 	return BlockParams{
@@ -72,6 +84,13 @@ func DefaultBlockParams() BlockParams {
 		MaxGas:     -1,
 		TimeIotaMs: 1000, // 1s
 	}
+}
+
+// DefaultFridayBlockParams returns a specialized friday BlockParams.
+func DefaultFridayBlockParams() BlockParams {
+	param := DefaultBlockParams()
+	param.LenULB = 2
+	return param
 }
 
 // DefaultEvidenceParams Params returns a default EvidenceParams.
