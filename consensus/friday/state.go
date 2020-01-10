@@ -99,9 +99,10 @@ type ConsensusState struct {
 
 	// state changes may be triggered by: msgs from peers,
 	// msgs from ourself, or by timeouts
-	peerMsgQueue     chan msgInfo
-	internalMsgQueue chan msgInfo
-	timeoutTicker    TimeoutTicker
+	peerMsgQueue       chan msgInfo
+	internalMsgQueue   chan msgInfo
+	timeoutTickers     sync.Map
+	aggregatedTockChan chan timeoutInfo
 
 	// information about about added votes and block parts are written on this channel
 	// so statistics can be computed by reactor
@@ -150,20 +151,21 @@ func NewConsensusState(
 	options ...StateOption,
 ) *ConsensusState {
 	cs := &ConsensusState{
-		config:           config,
-		blockExec:        blockExec,
-		blockStore:       blockStore,
-		txNotifier:       txNotifier,
-		peerMsgQueue:     make(chan msgInfo, msgQueueSize),
-		internalMsgQueue: make(chan msgInfo, msgQueueSize),
-		timeoutTicker:    NewTimeoutTicker(),
-		statsMsgQueue:    make(chan msgInfo, msgQueueSize),
-		done:             make(chan struct{}),
-		doWALCatchup:     true,
-		wal:              nilWAL{},
-		evpool:           evpool,
-		evsw:             tmevents.NewEventSwitch(),
-		metrics:          tmcs.NopMetrics(),
+		config:             config,
+		blockExec:          blockExec,
+		blockStore:         blockStore,
+		txNotifier:         txNotifier,
+		peerMsgQueue:       make(chan msgInfo, msgQueueSize),
+		internalMsgQueue:   make(chan msgInfo, msgQueueSize),
+		timeoutTickers:     sync.Map{},
+		aggregatedTockChan: make(chan timeoutInfo, tickTockBufferSize),
+		statsMsgQueue:      make(chan msgInfo, msgQueueSize),
+		done:               make(chan struct{}),
+		doWALCatchup:       true,
+		wal:                nilWAL{},
+		evpool:             evpool,
+		evsw:               tmevents.NewEventSwitch(),
+		metrics:            tmcs.NopMetrics(),
 	}
 	// set function defaults (may be overwritten before calling Start)
 	cs.decideProposal = cs.defaultDecideProposal
@@ -188,7 +190,6 @@ func NewConsensusState(
 // SetLogger implements Service.
 func (cs *ConsensusState) SetLogger(l log.Logger) {
 	cs.BaseService.Logger = l
-	cs.timeoutTicker.SetLogger(l)
 }
 
 // SetEventBus sets event bus.
@@ -259,13 +260,6 @@ func (cs *ConsensusState) SetPrivValidator(priv types.PrivValidator) {
 	cs.mtx.Unlock()
 }
 
-// SetTimeoutTicker sets the local timer. It may be useful to overwrite for testing.
-func (cs *ConsensusState) SetTimeoutTicker(timeoutTicker TimeoutTicker) {
-	cs.mtx.Lock()
-	cs.timeoutTicker = timeoutTicker
-	cs.mtx.Unlock()
-}
-
 // LoadCommit loads the commit for a given height.
 func (cs *ConsensusState) LoadCommit(height int64) *types.Commit {
 	cs.mtx.RLock()
@@ -302,8 +296,10 @@ func (cs *ConsensusState) OnStart() error {
 	// NOTE: we will get a build up of garbage go routines
 	// firing on the tockChan until the receiveRoutine is started
 	// to deal with them (by that point, at most one will be valid)
-	if err := cs.timeoutTicker.Start(); err != nil {
-		return err
+	if _, hasTicker := cs.timeoutTickers.Load(cs.Height); !hasTicker {
+		cs.timeoutTickers.Store(cs.Height, NewTimeoutTicker(cs.aggregatedTockChan))
+		ticker, _ := cs.timeoutTickers.Load(cs.Height)
+		ticker.(TimeoutTicker).Start()
 	}
 
 	// we may have lost some votes if the process crashed
@@ -343,21 +339,14 @@ go run scripts/json2wal/main.go wal.json $WALFILE # rebuild the file without cor
 	return nil
 }
 
-// timeoutRoutine: receive requests for timeouts on tickChan and fire timeouts on tockChan
-// receiveRoutine: serializes processing of proposoals, block parts, votes; coordinates state transitions
-func (cs *ConsensusState) startRoutines(maxSteps int) {
-	err := cs.timeoutTicker.Start()
-	if err != nil {
-		cs.Logger.Error("Error starting timeout ticker", "err", err)
-		return
-	}
-	go cs.receiveRoutine(maxSteps)
-}
-
 // OnStop implements cmn.Service.
 func (cs *ConsensusState) OnStop() {
 	cs.evsw.Stop()
-	cs.timeoutTicker.Stop()
+	cs.timeoutTickers.Range(func(key, value interface{}) bool {
+		ticker := value.(TimeoutTicker)
+		ticker.Stop()
+		return true
+	})
 	// WAL is stopped in receiveRoutine.
 }
 
@@ -457,13 +446,23 @@ func (cs *ConsensusState) updateRoundStep(round int, step cstypes.RoundStepType)
 // enterNewRound(height, 0) at cs.StartTime.
 func (cs *ConsensusState) scheduleRound0(rs *cstypes.RoundState) {
 	//cs.Logger.Info("scheduleRound0", "now", tmtime.Now(), "startTime", cs.StartTime)
+	if _, hasTicker := cs.timeoutTickers.Load(cs.Height); !hasTicker {
+		cs.timeoutTickers.Store(cs.Height, NewTimeoutTicker(cs.aggregatedTockChan))
+		ticker, _ := cs.timeoutTickers.Load(rs.Height)
+		ticker.(TimeoutTicker).Start()
+	}
+
 	sleepDuration := rs.StartTime.Sub(tmtime.Now())
 	cs.scheduleTimeout(sleepDuration, rs.Height, 0, cstypes.RoundStepNewHeight)
 }
 
 // Attempt to schedule a timeout (by sending timeoutInfo on the tickChan)
 func (cs *ConsensusState) scheduleTimeout(duration time.Duration, height int64, round int, step cstypes.RoundStepType) {
-	cs.timeoutTicker.ScheduleTimeout(timeoutInfo{duration, height, round, step})
+	ticker, ok := cs.timeoutTickers.Load(height)
+	if !ok {
+		panic("Must be initialized ticker")
+	}
+	ticker.(TimeoutTicker).ScheduleTimeout(timeoutInfo{duration, height, round, step})
 }
 
 // send a msg into the receiveRoutine regarding our own proposal, block part, or vote
@@ -650,7 +649,9 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 
 			// handles proposals, block parts, votes
 			cs.handleMsg(mi)
-		case ti := <-cs.timeoutTicker.Chan(): // tockChan:
+		case ti := <-cs.aggregatedTockChan: // tockChan:
+			// TODO: this commit purpose serve to prepare multiple round on TimeoutTicker
+			// so, not handled to each height yet
 			cs.wal.Write(ti)
 			// if the timeout is relevant to the rs
 			// go to the next step
@@ -1369,6 +1370,11 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 	cs.updateToState(stateCopy)
 
 	fail.Fail() // XXX
+
+	if ticker, hasTicker := cs.timeoutTickers.Load(height); hasTicker {
+		ticker.(TimeoutTicker).Stop()
+	}
+	cs.timeoutTickers.Delete(height)
 
 	// cs.StartTime is already set.
 	// Schedule Round0 to start soon.
