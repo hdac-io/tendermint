@@ -187,7 +187,16 @@ func (conR *ConsensusReactor) AddPeer(peer p2p.Peer) {
 	// Send our state to peer.
 	// If we're fast_syncing, broadcast a RoundStepMessage later upon SwitchToConsensus().
 	if !conR.FastSync() {
-		conR.sendNewRoundStepMessage(peer)
+		conR.conS.GetRoundStatesMap().Range(func(key, value interface{}) bool {
+			//copy for when just cleanup finalized Round
+			rs := conR.conS.GetRoundState(key.(int64))
+			if rs == nil {
+				return true
+			}
+
+			conR.sendNewRoundStepMessage(key.(int64), peer)
+			return true
+		})
 	}
 }
 
@@ -248,12 +257,17 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 			ps.ApplyHasVoteMessage(msg)
 		case *VoteSetMaj23Message:
 			cs := conR.conS
-			cs.mtx.Lock()
-			height, votes := cs.Height, cs.Votes
-			cs.mtx.Unlock()
-			if height != msg.Height {
+
+			if cs.GetLastHeight()+1 != msg.Height {
 				return
 			}
+
+			heightRound := cs.GetRoundState(msg.Height)
+			if heightRound == nil {
+				return
+			}
+			votes := heightRound.Votes
+
 			// Peer claims to have a maj23 for some BlockID at H,R,S,
 			err := votes.SetPeerMaj23(msg.Round, msg.Type, ps.peer.ID(), msg.BlockID)
 			if err != nil {
@@ -309,9 +323,13 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 		switch msg := msg.(type) {
 		case *VoteMessage:
 			cs := conR.conS
-			cs.mtx.RLock()
-			height, valSize, lastCommitSize := cs.Height, cs.Validators.Size(), cs.LastCommit.Size()
-			cs.mtx.RUnlock()
+			height := cs.GetLastHeight() + 1
+			heightRound := cs.GetRoundState(height)
+			if heightRound == nil {
+				return
+			}
+			height, valSize, lastCommitSize := height, heightRound.Validators.Size(), heightRound.LastCommit.Size()
+
 			ps.EnsureVoteBitArrays(height, valSize)
 			ps.EnsureVoteBitArrays(height-1, lastCommitSize)
 			ps.SetHasVote(msg.Vote)
@@ -331,9 +349,12 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 		switch msg := msg.(type) {
 		case *VoteSetBitsMessage:
 			cs := conR.conS
-			cs.mtx.Lock()
-			height, votes := cs.Height, cs.Votes
-			cs.mtx.Unlock()
+			height := cs.GetLastHeight() + 1
+			heightRound := cs.GetRoundState(height)
+			if heightRound == nil {
+				return
+			}
+			votes := heightRound.Votes
 
 			if height == msg.Height {
 				var ourVotes *cmn.BitArray
@@ -457,8 +478,12 @@ func makeRoundStepMessage(rs *cstypes.RoundState) (nrsMsg *NewRoundStepMessage) 
 	return
 }
 
-func (conR *ConsensusReactor) sendNewRoundStepMessage(peer p2p.Peer) {
-	rs := conR.conS.GetRoundState()
+func (conR *ConsensusReactor) sendNewRoundStepMessage(height int64, peer p2p.Peer) {
+	rs := conR.conS.GetRoundState(height)
+	if rs == nil {
+		return
+	}
+
 	nrsMsg := makeRoundStepMessage(rs)
 	peer.Send(StateChannel, cdc.MustMarshalBinaryBare(nrsMsg))
 }
@@ -473,7 +498,7 @@ OUTER_LOOP:
 			logger.Info("Stopping gossipDataRoutine for peer")
 			return
 		}
-		rs := conR.conS.GetRoundState()
+		rs := conR.conS.GetRoundState(conR.conS.GetLastHeight() + 1)
 		prs := ps.GetRoundState()
 
 		// Send proposal Block parts?
@@ -613,7 +638,7 @@ OUTER_LOOP:
 			logger.Info("Stopping gossipVotesRoutine for peer")
 			return
 		}
-		rs := conR.conS.GetRoundState()
+		rs := conR.conS.GetRoundState(conR.conS.GetLastHeight() + 1)
 		prs := ps.GetRoundState()
 
 		switch sleeping {
@@ -740,7 +765,7 @@ OUTER_LOOP:
 
 		// Maybe send Height/Round/Prevotes
 		{
-			rs := conR.conS.GetRoundState()
+			rs := conR.conS.GetRoundState(conR.conS.GetLastHeight() + 1)
 			prs := ps.GetRoundState()
 			if rs.Height == prs.Height {
 				if maj23, ok := rs.Votes.Prevotes(prs.Round).TwoThirdsMajority(); ok {
@@ -757,7 +782,7 @@ OUTER_LOOP:
 
 		// Maybe send Height/Round/Precommits
 		{
-			rs := conR.conS.GetRoundState()
+			rs := conR.conS.GetRoundState(conR.conS.GetLastHeight() + 1)
 			prs := ps.GetRoundState()
 			if rs.Height == prs.Height {
 				if maj23, ok := rs.Votes.Precommits(prs.Round).TwoThirdsMajority(); ok {
@@ -774,7 +799,7 @@ OUTER_LOOP:
 
 		// Maybe send Height/Round/ProposalPOL
 		{
-			rs := conR.conS.GetRoundState()
+			rs := conR.conS.GetRoundState(conR.conS.GetLastHeight() + 1)
 			prs := ps.GetRoundState()
 			if rs.Height == prs.Height && prs.ProposalPOLRound >= 0 {
 				if maj23, ok := rs.Votes.Prevotes(prs.ProposalPOLRound).TwoThirdsMajority(); ok {
@@ -864,15 +889,19 @@ func (conR *ConsensusReactor) String() string {
 // StringIndented returns an indented string representation of the ConsensusReactor
 func (conR *ConsensusReactor) StringIndented(indent string) string {
 	s := "ConsensusReactor{\n"
-	s += indent + "  " + conR.conS.StringIndented(indent+"  ") + "\n"
-	for _, peer := range conR.Switch.Peers().List() {
-		ps, ok := peer.Get(types.PeerStateKey).(*PeerState)
-		if !ok {
-			panic(fmt.Sprintf("Peer %v has no state", peer))
+
+	conR.conS.GetRoundStatesMap().Range(func(key, value interface{}) bool {
+		height := key.(int64)
+		//copy for when just cleanup finalized Round
+		rs := conR.conS.GetRoundState(height)
+		if rs == nil {
+			return true
 		}
-		s += indent + "  " + ps.StringIndented(indent+"  ") + "\n"
-	}
-	s += indent + "}"
+
+		s += indent + "  " + rs.StringIndented(indent+"  ") + "\n"
+		return true
+	})
+
 	return s
 }
 
