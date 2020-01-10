@@ -41,7 +41,7 @@ func EnsureRoot(rootDir string) {
 
 	// Write default config file if missing.
 	if !cmn.FileExists(configFilePath) {
-		writeDefaultConfigFile(configFilePath)
+		writeDefaultFridayConfigFile(configFilePath)
 	}
 }
 
@@ -49,6 +49,12 @@ func EnsureRoot(rootDir string) {
 // alongside the writing of the genesis.json and priv_validator.json
 func writeDefaultConfigFile(configFilePath string) {
 	WriteConfigFile(configFilePath, DefaultConfig())
+}
+
+// XXX: this func should probably be called by cmd/tendermint/commands/init.go
+// alongside the writing of the genesis.json and priv_validator.json
+func writeDefaultFridayConfigFile(configFilePath string) {
+	WriteConfigFile(configFilePath, DefaultFridayConfig())
 }
 
 // WriteConfigFile renders config using the template and writes it to configFilePath.
@@ -306,10 +312,21 @@ max_tx_bytes = {{ .Mempool.MaxTxBytes }}
 #   2) "v1" - refactor of v0 version for better testability
 version = "{{ .FastSync.Version }}"
 
+# Fast Sync pool version to use:
+#   1) "tendermint" (default) - the default fast sync implementation
+#   2) "friday" - the customize implementation for friday consensus
+pool_version = "{{ .FastSync.PoolVersion }}"
+
 ##### consensus configuration options #####
 [consensus]
 
+# Consensus version to use:
+#   1) "tendermint" (default) - the default consensus implementation
+#   2) "friday" - the friday consensus implementation 
+version = "{{ .Consensus.Version }}"
+
 wal_file = "{{ js .Consensus.WalPath }}"
+
 
 timeout_propose = "{{ .Consensus.TimeoutPropose }}"
 timeout_propose_delta = "{{ .Consensus.TimeoutProposeDelta }}"

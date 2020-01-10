@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	config = cfg.DefaultConfig()
+	config = cfg.DefaultFridayConfig()
 	logger = log.NewTMLogger(log.NewSyncWriter(os.Stdout))
 )
 
@@ -29,7 +29,7 @@ func registerFlagsRootCmd(cmd *cobra.Command) {
 // ParseConfig retrieves the default environment configuration,
 // sets up the Tendermint root and ensures that the root exists
 func ParseConfig() (*cfg.Config, error) {
-	conf := cfg.DefaultConfig()
+	conf := cfg.DefaultFridayConfig()
 	err := viper.Unmarshal(conf)
 	if err != nil {
 		return nil, err
