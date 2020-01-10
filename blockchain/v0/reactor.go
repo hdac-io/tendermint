@@ -354,7 +354,7 @@ FOR_LOOP:
 				bcR.pool.PopRequest()
 
 				// TODO: batch saves so we dont persist to disk every block
-				bcR.store.SaveBlock(first, firstParts, second.LastCommit)
+				bcR.store.SaveBlock(first, firstParts, second.LastCommit, 1)
 
 				// TODO: same thing for app - but we would need a way to
 				// get the hash without persisting the state
