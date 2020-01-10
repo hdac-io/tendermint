@@ -85,6 +85,20 @@ func DefaultConfig() *Config {
 	}
 }
 
+// DefaultFridayConfig returns a default configuration for a Tendermint node
+func DefaultFridayConfig() *Config {
+	return &Config{
+		BaseConfig:      DefaultBaseConfig(),
+		RPC:             DefaultRPCConfig(),
+		P2P:             DefaultP2PConfig(),
+		Mempool:         DefaultMempoolConfig(),
+		FastSync:        DefaultFridayFastSyncConfig(),
+		Consensus:       DefaultFridayConsensusConfig(),
+		TxIndex:         DefaultTxIndexConfig(),
+		Instrumentation: DefaultInstrumentationConfig(),
+	}
+}
+
 // TestConfig returns a configuration that can be used for testing
 func TestConfig() *Config {
 	return &Config{
@@ -94,6 +108,20 @@ func TestConfig() *Config {
 		Mempool:         TestMempoolConfig(),
 		FastSync:        TestFastSyncConfig(),
 		Consensus:       TestConsensusConfig(),
+		TxIndex:         TestTxIndexConfig(),
+		Instrumentation: TestInstrumentationConfig(),
+	}
+}
+
+// TestFridayConfig returns a configuration that can be used for testing
+func TestFridayConfig() *Config {
+	return &Config{
+		BaseConfig:      TestBaseConfig(),
+		RPC:             TestRPCConfig(),
+		P2P:             TestP2PConfig(),
+		Mempool:         TestMempoolConfig(),
+		FastSync:        TestFridayFastSyncConfig(),
+		Consensus:       TestFridayConsensusConfig(),
 		TxIndex:         TestTxIndexConfig(),
 		Instrumentation: TestInstrumentationConfig(),
 	}
@@ -709,9 +737,22 @@ func DefaultFastSyncConfig() *FastSyncConfig {
 	}
 }
 
+// DefaultFridayFastSyncConfig returns a default specialized friday configuration for the fast sync service
+func DefaultFridayFastSyncConfig() *FastSyncConfig {
+	return &FastSyncConfig{
+		Version:     "v0",
+		PoolVersion: "friday",
+	}
+}
+
 // TestFastSyncConfig returns a default configuration for the fast sync.
 func TestFastSyncConfig() *FastSyncConfig {
 	return DefaultFastSyncConfig()
+}
+
+// TestFridayFastSyncConfig returns a default configuration for the fast sync.
+func TestFridayFastSyncConfig() *FastSyncConfig {
+	return DefaultFridayFastSyncConfig()
 }
 
 // ValidateBasic performs basic validation.

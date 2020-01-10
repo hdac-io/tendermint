@@ -92,7 +92,7 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 		)
 	}
 
-	config := cfg.DefaultConfig()
+	config := cfg.DefaultFridayConfig()
 
 	// overwrite default config if set and valid
 	if configFile != "" {
