@@ -270,7 +270,9 @@ func (cs *ConsensusState) SetTimeoutTicker(timeoutTicker TimeoutTicker) {
 func (cs *ConsensusState) LoadCommit(height int64) *types.Commit {
 	cs.mtx.RLock()
 	defer cs.mtx.RUnlock()
-	if height == cs.blockStore.Height() {
+	bsHeight := cs.blockStore.Height()
+	distance := bsHeight - height
+	if distance <= cs.state.ConsensusParams.Block.LenULB {
 		return cs.blockStore.LoadSeenCommit(height)
 	}
 	return cs.blockStore.LoadBlockCommit(height)
@@ -1306,13 +1308,15 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 
 	fail.Fail() // XXX
 
+	lenULB := cs.state.ConsensusParams.Block.LenULB
+
 	// Save to blockStore.
 	if cs.blockStore.Height() < block.Height {
 		// NOTE: the seenCommit is local justification to commit this block,
 		// but may differ from the LastCommit included in the next block
 		precommits := cs.Votes.Precommits(cs.CommitRound)
 		seenCommit := precommits.MakeCommit()
-		cs.blockStore.SaveBlock(block, blockParts, seenCommit)
+		cs.blockStore.SaveBlock(block, blockParts, seenCommit, lenULB)
 	} else {
 		// Happens during replay if we already saved the block but didn't commit
 		cs.Logger.Info("Calling finalizeCommit on already stored block", "height", block.Height)
