@@ -37,11 +37,11 @@ type timeoutTicker struct {
 }
 
 // NewTimeoutTicker returns a new TimeoutTicker.
-func NewTimeoutTicker() TimeoutTicker {
+func NewTimeoutTicker(aggregatedTockChan chan timeoutInfo) TimeoutTicker {
 	tt := &timeoutTicker{
 		timer:    time.NewTimer(0),
 		tickChan: make(chan timeoutInfo, tickTockBufferSize),
-		tockChan: make(chan timeoutInfo, tickTockBufferSize),
+		tockChan: aggregatedTockChan,
 	}
 	tt.BaseService = *cmn.NewBaseService(nil, "TimeoutTicker", tt)
 	tt.stopTimer() // don't want to fire until the first scheduled timeout
