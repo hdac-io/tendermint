@@ -1905,6 +1905,20 @@ func (cs *ConsensusState) signAddVote(height int64, type_ types.SignedMsgType, h
 
 //---------------------------------------------------------
 
+func CompareRS(r1 int, s1 cstypes.RoundStepType, r2 int, s2 cstypes.RoundStepType) int {
+	if r1 < r2 {
+		return -1
+	} else if r1 > r2 {
+		return 1
+	}
+	if s1 < s2 {
+		return -1
+	} else if s1 > s2 {
+		return 1
+	}
+	return 0
+}
+
 func CompareHRS(h1 int64, r1 int, s1 cstypes.RoundStepType, h2 int64, r2 int, s2 cstypes.RoundStepType) int {
 	if h1 < h2 {
 		return -1
