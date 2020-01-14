@@ -551,14 +551,26 @@ func (cs *ConsensusState) reconstructLastCommit(state sm.State) {
 	if state.LastBlockHeight == 0 {
 		return
 	}
-	seenCommit := cs.blockStore.LoadSeenCommit(state.LastBlockHeight)
-	lastPrecommits := types.CommitToVoteSet(state.ChainID, seenCommit, state.LastValidators)
-	if !lastPrecommits.HasTwoThirdsMajority() {
-		panic("Failed to reconstruct LastCommit: Does not have +2/3 maj")
-	}
 
-	cs.updateNewHeight(state.LastBlockHeight + 1)
-	cs.getRoundState(state.LastBlockHeight + 1).LastCommit = lastPrecommits
+	startReconstructHeight := state.LastBlockHeight - cs.state.ConsensusParams.Block.LenULB + 1
+	for height, i := startReconstructHeight, 0; height <= state.LastBlockHeight; height, i = height+1, i+1 {
+		ulbValidators, err := sm.LoadValidators(cs.blockExec.DB(), height)
+		if err != nil {
+			panic("Cannot load ulb validators into reconstructLastCommit")
+		}
+
+		seenCommit := cs.blockStore.LoadSeenCommit(height)
+		lastPrecommits := types.CommitToVoteSet(state.ChainID, seenCommit, ulbValidators)
+		if !lastPrecommits.HasTwoThirdsMajority() {
+			panic("Failed to reconstruct LastCommit: Does not have +2/3 maj")
+		}
+
+		restoreHeight := height + cs.state.ConsensusParams.Block.LenULB
+		cs.updateHeight(restoreHeight)
+		restoreRs := cs.getRoundState(restoreHeight)
+		restoreRs.LastCommit = lastPrecommits
+		restoreRs.LastValidators = ulbValidators
+	}
 }
 
 // Updates ConsensusState and increments height to match that of state.
