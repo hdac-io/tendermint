@@ -1116,24 +1116,63 @@ func (cs *ConsensusState) isProposalComplete(height int64) bool {
 // NOTE: keep it side-effect free for clarity.
 func (cs *ConsensusState) createProposalBlock(height int64) (block *types.Block, blockParts *types.PartSet) {
 	var commit *types.Commit
-	rs := cs.getRoundState(height)
+	var validators *types.ValidatorSet
+	var appHash []byte
+	var resultsHash []byte
 
-	switch {
-	case height == 1:
-		// We're creating a proposal for the first block.
+	if height <= cs.state.ConsensusParams.Block.LenULB {
+		// We're creating a proposal for the previous ULB block.
 		// The commit is empty, but not nil.
 		commit = types.NewCommit(types.BlockID{}, nil)
-	case rs.LastCommit.HasTwoThirdsMajority():
-		// Make the commit from LastCommit
+		validators = types.NewValidatorSet(nil)
+	} else if rs := cs.getRoundState(height); rs != nil && rs.LastCommit.HasTwoThirdsMajority() {
+		ulbHeight := height - cs.state.ConsensusParams.Block.LenULB
+
+		// Make the commit from ULBCommit
 		commit = rs.LastCommit.MakeCommit()
-	default:
+		validators = rs.LastValidators
+
+		// Getting committed block informations from db
+		var appHashErr error
+		appHash, appHashErr = sm.LoadAppHash(cs.blockExec.DB(), ulbHeight)
+		if appHashErr != nil {
+			panic(fmt.Sprintf("Cannot load ulb AppHash. ulbHeight=%v, LastBlockHeight=%v, error=%v", ulbHeight, cs.state.LastBlockHeight, appHashErr.Error()))
+		}
+		ulbABCIResponses, resErr := sm.LoadABCIResponses(cs.blockExec.DB(), ulbHeight)
+		if resErr != nil {
+			panic(fmt.Sprintf("Cannot load ulb ABCI responses. ulbHeight=%v, LastBlockHeight=%v, error=%v", ulbHeight, cs.state.LastBlockHeight, resErr.Error()))
+		}
+		resultsHash = ulbABCIResponses.ResultsHash()
+	} else {
 		// This shouldn't happen.
-		cs.Logger.Error("enterPropose: Cannot propose anything: No commit for the previous block.")
+		cs.Logger.Error("enterPropose: Cannot propose anything: No commit for the previous block.", "height", height)
 		return
 	}
 
+	var prevBlockID types.BlockID
+	var prevTotalTxs int64
+	if height != 1 {
+		if cs.state.LastBlockHeight >= height-1 {
+			prevMeta := cs.blockStore.LoadBlockMeta(height - 1)
+			if prevMeta == nil {
+				panic("createProposalBlock must be call when after received previous block")
+			}
+			//attach to commited block
+			prevBlockID = prevMeta.BlockID
+			prevTotalTxs = prevMeta.Header.TotalTxs
+		} else if prevRs := cs.GetRoundState(height - 1); prevRs != nil && prevRs.ProposalBlock != nil {
+			//attach to progressing block
+			prevBlockID = types.BlockID{Hash: prevRs.ProposalBlock.Hash(), PartsHeader: prevRs.ProposalBlockParts.Header()}
+			prevTotalTxs = prevRs.ProposalBlock.TotalTxs
+		} else {
+			//prev height already going next rounds, so reseted ProposalBlock situation now
+			cs.Logger.Error("consensuns of previous proposal block is failed into createProposalBlock")
+			return
+		}
+	}
+
 	proposerAddr := cs.privValidator.GetPubKey().Address()
-	return cs.blockExec.CreateProposalBlock(height, cs.state, commit, proposerAddr)
+	return cs.blockExec.CreateProposalBlockFromArgs(height, prevBlockID, prevTotalTxs, cs.state, commit, validators, appHash, resultsHash, proposerAddr)
 }
 
 // Enter: `timeoutPropose` after entering Propose.

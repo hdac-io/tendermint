@@ -101,6 +101,34 @@ func (blockExec *BlockExecutor) CreateProposalBlock(
 	return state.MakeBlock(height, txs, commit, evidence, proposerAddr)
 }
 
+// CreateProposalBlockFromArgs calls state.MakeBlockFromArgs with evidence from the evpool
+// and txs from the mempool. The max bytes must be big enough to fit the commit.
+// Up to 1/10th of the block space is allcoated for maximum sized evidence.
+// The rest is given to txs, up to the max gas.
+func (blockExec *BlockExecutor) CreateProposalBlockFromArgs(
+	height int64,
+	prevBlockID types.BlockID,
+	prevBlockTotalTxs int64,
+	state State,
+	commit *types.Commit, validators *types.ValidatorSet,
+	appHash []byte, resultsHash []byte,
+	proposerAddr []byte,
+) (*types.Block, *types.PartSet) {
+
+	maxBytes := state.ConsensusParams.Block.MaxBytes
+	maxGas := state.ConsensusParams.Block.MaxGas
+
+	// Fetch a limited amount of valid evidence
+	maxNumEvidence, _ := types.MaxEvidencePerBlock(maxBytes)
+	evidence := blockExec.evpool.PendingEvidence(maxNumEvidence)
+
+	// Fetch a limited amount of valid txs
+	maxDataBytes := types.MaxDataBytes(maxBytes, state.Validators.Size(), len(evidence))
+	txs := blockExec.mempool.ReapMaxBytesMaxGas(maxDataBytes, maxGas)
+
+	return state.MakeBlockFromArgs(height, txs, prevBlockID, prevBlockTotalTxs, commit, validators, evidence, proposerAddr, appHash, resultsHash)
+}
+
 // ValidateBlock validates the given block against the given state.
 // If the block is invalid, it returns an error.
 // Validation does not mutate state, but does require historical information from the stateDB,
