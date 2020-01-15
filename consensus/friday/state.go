@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"runtime/debug"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
@@ -97,7 +98,9 @@ type ConsensusState struct {
 	roundStates sync.Map
 	state       sm.State // State until height-1.
 
-	finalizeMtx sync.RWMutex
+	finalizeMtx      sync.RWMutex
+	waitFinalizeCond *sync.Cond
+	waitFinalize     int32
 
 	// state changes may be triggered by: msgs from peers,
 	// msgs from ourself, or by timeouts
@@ -178,6 +181,8 @@ func NewConsensusState(
 	cs.decideProposal = cs.defaultDecideProposal
 	cs.doPrevote = cs.defaultDoPrevote
 	cs.setProposal = cs.defaultSetProposal
+
+	cs.waitFinalizeCond = sync.NewCond(&cs.finalizeMtx)
 
 	cs.updateToState(state)
 
@@ -1518,6 +1523,20 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 	if !block.HashesTo(blockID.Hash) {
 		panic(fmt.Sprintf("Cannot finalizeCommit, ProposalBlock does not hash to commit hash"))
 	}
+
+	//Wait finalize previous block
+	for {
+		got, now := height, cs.state.LastBlockHeight
+		wanted := now + 1
+		if got == wanted {
+			break
+		}
+
+		cs.Logger.Debug("Previous block is not finalized yet", "Current Finalizing height", got, "Previous finalized height", now)
+		atomic.StoreInt32(&cs.waitFinalize, 1)
+		cs.waitFinalizeCond.Wait()
+	}
+
 	if err := cs.blockExec.ValidateBlock(cs.state, block); err != nil {
 		panic(fmt.Sprintf("+2/3 committed an invalid block: %v", err))
 	}
@@ -1592,15 +1611,15 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 
 	cs.cleanupFinalizedRoundState(height)
 
-	// cs.StartTime is already set.
-	// Schedule Round0 to start soon.
-	nextHeightRound := cs.getRoundState(height + 1)
-	cs.scheduleRound0(nextHeightRound)
-
 	// By here,
 	// * cs.Height has been increment to height+1
 	// * cs.Step is now cstypes.RoundStepNewHeight
 	// * cs.StartTime is set to when we will start round0.
+
+	if atomic.LoadInt32(&cs.waitFinalize) == 1 {
+		cs.waitFinalizeCond.Broadcast()
+		atomic.StoreInt32(&cs.waitFinalize, 0)
+	}
 }
 
 func (cs *ConsensusState) recordMetrics(height int64, block *types.Block) {
@@ -1729,6 +1748,8 @@ func (cs *ConsensusState) addProposalBlockPart(msg *BlockPartMessage, peerID p2p
 		// NOTE: it's possible to receive complete proposal blocks for future rounds without having the proposal
 		cs.Logger.Info("Received complete proposal block", "height", heightRound.ProposalBlock.Height, "hash", heightRound.ProposalBlock.Hash())
 		cs.eventBus.PublishEventCompleteProposal(heightRound.CompleteProposalEvent())
+
+		cs.scheduleNewHeightRound0(height + 1)
 
 		// Update Valid* if we can.
 		prevotes := heightRound.Votes.Prevotes(heightRound.Round)
