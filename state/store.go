@@ -31,6 +31,10 @@ func calcABCIResponsesKey(height int64) []byte {
 	return []byte(fmt.Sprintf("abciResponsesKey:%v", height))
 }
 
+func calcAppHashKey(height int64) []byte {
+	return []byte(fmt.Sprintf("appHashKey:%v", height))
+}
+
 // LoadStateFromDBOrGenesisFile loads the most recent state from the database,
 // or creates a new one from the given genesisFilePath and persists the result
 // to the database.
@@ -106,6 +110,9 @@ func saveState(db dbm.DB, state State, key []byte) {
 	saveValidatorsInfo(db, nextHeight+1, state.LastHeightValidatorsChanged, state.NextValidators)
 	// Save next consensus params.
 	saveConsensusParamsInfo(db, nextHeight, state.LastHeightConsensusParamsChanged, state.ConsensusParams)
+	// Save current app hash
+	saveAppHash(db, state.LastBlockHeight, state.AppHash)
+
 	db.SetSync(key, state.Bytes())
 }
 
@@ -330,4 +337,17 @@ func saveConsensusParamsInfo(db dbm.DB, nextHeight, changeHeight int64, params t
 		paramsInfo.ConsensusParams = params
 	}
 	db.Set(calcConsensusParamsKey(nextHeight), paramsInfo.Bytes())
+}
+
+//-----------------------------------------------------------------------------
+// saveAppHash persists the app result hash.
+func saveAppHash(db dbm.DB, height int64, appHash []byte) {
+	db.SetSync(calcAppHashKey(height), appHash)
+}
+
+// LoadAppHash for save the db, get from CreateProposalBlcok
+// it's useful seperate to using state into block making logic
+func LoadAppHash(db dbm.DB, height int64) ([]byte, error) {
+	appHash := db.Get(calcAppHashKey(height))
+	return appHash, nil
 }
