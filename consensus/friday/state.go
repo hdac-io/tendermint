@@ -110,6 +110,9 @@ type ConsensusState struct {
 	// so statistics can be computed by reactor
 	statsMsgQueue chan msgInfo
 
+	// signal for scheduling new height, triggered by: scheduleNewHeightRound0
+	newHeightQueue chan int64
+
 	// we use eventBus to trigger msg broadcasts in the reactor,
 	// and to notify external subscribers, eg. through a websocket
 	eventBus *types.EventBus
@@ -162,6 +165,7 @@ func NewConsensusState(
 		timeoutTickers:     sync.Map{},
 		aggregatedTockChan: make(chan timeoutInfo, tickTockBufferSize),
 		statsMsgQueue:      make(chan msgInfo, msgQueueSize),
+		newHeightQueue:     make(chan int64),
 		done:               make(chan struct{}),
 		doWALCatchup:       true,
 		wal:                nilWAL{},
@@ -372,8 +376,7 @@ go run scripts/json2wal/main.go wal.json $WALFILE # rebuild the file without cor
 
 	// schedule the first round!
 	// use GetRoundState so we don't race the receiveRoutine for access
-	cs.scheduleRound0(cs.GetRoundState(height))
-
+	cs.scheduleNewHeightRound0(height)
 	return nil
 }
 
@@ -507,6 +510,24 @@ func (cs *ConsensusState) updateRoundStep(height int64, round int, step cstypes.
 	}
 	heightRound.Round = round
 	heightRound.Step = step
+}
+
+// Enter : onStart
+// Enter : received complete proposal block by previous height
+func (cs *ConsensusState) scheduleNewHeightRound0(height int64) {
+	// ignore commited height
+	if cs.state.LastBlockHeight < height {
+		go func() {
+			if height > cs.state.ConsensusParams.Block.LenULB {
+				//Waiting for ulb round commit
+				for ulbHeight := height - cs.state.ConsensusParams.Block.LenULB; ulbHeight > cs.state.LastBlockHeight; {
+					time.Sleep(time.Millisecond * 10)
+				}
+			}
+
+			cs.newHeightQueue <- height
+		}()
+	}
 }
 
 // enterNewRound(height, 0) at cs.StartTime.
@@ -745,6 +766,14 @@ func (cs *ConsensusState) receiveRoutine(maxSteps int) {
 			// if the timeout is relevant to the rs
 			// go to the next step
 			go cs.handleTimeout(ti)
+		case height := <-cs.newHeightQueue:
+			newHeightRound := cs.getRoundState(height)
+			if newHeightRound == nil {
+				cs.updateHeight(height)
+				newHeightRound = cs.getRoundState(height)
+			}
+
+			cs.scheduleRound0(newHeightRound)
 		case <-cs.Quit():
 			onExit(cs)
 			return
