@@ -161,6 +161,42 @@ func (state State) MakeBlock(
 	return block, block.MakePartSet(types.BlockPartSizeBytes)
 }
 
+//MakeBlockFromArgs just filling immutable chain metadata from state, another mutable data filling from args
+func (state State) MakeBlockFromArgs(
+	height int64,
+	txs []types.Tx,
+	prevBlockID types.BlockID,
+	prevBlockTotalTxs int64,
+	commit *types.Commit, validators *types.ValidatorSet, //Pair matched Commit and ValidatorSet
+	evidence []types.Evidence,
+	proposerAddress []byte,
+	appHash []byte,
+	resultsHash []byte,
+) (*types.Block, *types.PartSet) {
+
+	// Build base block with block data.
+	block := types.MakeBlock(height, txs, commit, evidence)
+
+	// Set time.
+	var timestamp time.Time
+	if height == 1 {
+		timestamp = state.LastBlockTime // genesis time
+	} else {
+		timestamp = MedianTime(commit, validators)
+	}
+	//TODO : fix state.Validators, .NextValidators, .ConsensusParams -> getting from persistant db
+	// Fill rest of header with state data.
+	block.Header.Populate(
+		state.Version.Consensus, state.ChainID,
+		timestamp, prevBlockID, prevBlockTotalTxs+block.NumTxs,
+		state.Validators.Hash(), state.NextValidators.Hash(),
+		state.ConsensusParams.Hash(), appHash, resultsHash,
+		proposerAddress,
+	)
+
+	return block, block.MakePartSet(types.BlockPartSizeBytes)
+}
+
 // MedianTime computes a median time for a given Commit (based on Timestamp field of votes messages) and the
 // corresponding validator set. The computed time is always between timestamps of
 // the votes sent by honest processes, i.e., a faulty processes can not arbitrarily increase or decrease the
