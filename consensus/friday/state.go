@@ -485,14 +485,61 @@ func (cs *ConsensusState) updateHeight(height int64) {
 }
 
 func (cs *ConsensusState) updateNewHeight(height int64) bool {
-	if _, loaded := cs.roundStates.LoadOrStore(
+
+	validators := (*types.ValidatorSet)(nil)
+	ulbPrecommits := (*types.VoteSet)(nil)
+	ulbValidators := (*types.ValidatorSet)(nil)
+
+	if height > cs.state.ConsensusParams.Block.LenULB {
+		ulbHeight := height - cs.state.ConsensusParams.Block.LenULB
+
+		// cannot getting ulb commits and validators when restart shutdowned node
+		// it's come recovery to reconstructLastCommit
+		if interfaceULB, hasULBRound := cs.roundStates.Load(ulbHeight); hasULBRound {
+			ulbRound := interfaceULB.(*cstypes.RoundState)
+			if ulbRound.CommitRound > -1 && ulbRound.Votes != nil {
+				if !ulbRound.Votes.Precommits(ulbRound.CommitRound).HasTwoThirdsMajority() {
+					panic("updateToState(state) called but last Precommit round didn't have +2/3")
+				}
+				ulbPrecommits = ulbRound.Votes.Precommits(ulbRound.CommitRound)
+				ulbValidators = ulbRound.Validators
+			}
+		}
+
+		validators, _ = sm.LoadValidators(cs.blockExec.DB(), height)
+	} else {
+		validators = cs.state.Validators.Copy()
+	}
+
+	startTime := tmtime.Now()
+
+	cs.roundStates.LoadOrStore(
 		height,
 		&cstypes.RoundState{
-			Height: height,
-			Step:   cstypes.RoundStepNewHeight,
-		}); loaded {
-		return false
-	}
+			Height:                    height,
+			Round:                     0,
+			Step:                      cstypes.RoundStepNewHeight,
+			StartTime:                 startTime,
+			Validators:                validators,
+			Proposal:                  nil,
+			ProposalBlock:             nil,
+			ProposalBlockParts:        nil,
+			LockedRound:               -1,
+			LockedBlock:               nil,
+			LockedBlockParts:          nil,
+			ValidRound:                -1,
+			ValidBlock:                nil,
+			ValidBlockParts:           nil,
+			Votes:                     cstypes.NewHeightVoteSet(cs.state.ChainID, height, validators),
+			CommitRound:               -1,
+			LastCommit:                ulbPrecommits,
+			LastValidators:            ulbValidators,
+			TriggeredTimeoutPrecommit: false,
+		},
+	)
+
+	// Finally, broadcast RoundState
+	cs.newStep(height)
 
 	return true
 }
@@ -602,10 +649,6 @@ func (cs *ConsensusState) reconstructLastCommit(state sm.State) {
 // Updates ConsensusState and increments height to match that of state.
 // The round becomes 0 and cs.Step becomes cstypes.RoundStepNewHeight.
 func (cs *ConsensusState) updateToState(state sm.State) {
-
-	validators := state.Validators
-	lastPrecommits := (*types.VoteSet)(nil)
-
 	if !cs.state.IsEmpty() {
 		rs := cs.getRoundState(cs.state.LastBlockHeight + 1)
 
@@ -630,56 +673,17 @@ func (cs *ConsensusState) updateToState(state sm.State) {
 			cs.newStep(state.LastBlockHeight + 1)
 			return
 		}
-
-		// Reset fields based on state.
-		if rs.CommitRound > -1 && rs.Votes != nil {
-			if !rs.Votes.Precommits(rs.CommitRound).HasTwoThirdsMajority() {
-				panic("updateToState(state) called but last Precommit round didn't have +2/3")
-			}
-			lastPrecommits = rs.Votes.Precommits(rs.CommitRound)
-		}
 	} else {
 
 	}
+
+	cs.state = state
 
 	// Next desired block height
 	height := state.LastBlockHeight + 1
 
 	// RoundState fields
 	cs.updateHeight(height)
-	cs.updateRoundStep(height, 0, cstypes.RoundStepNewHeight)
-	newHeightRs := cs.getRoundState(height)
-	if newHeightRs.CommitTime.IsZero() {
-		// "Now" makes it easier to sync up dev nodes.
-		// We add timeoutCommit to allow transactions
-		// to be gathered for the first block.
-		// And alternative solution that relies on clocks:
-		// cs.StartTime = state.LastBlockTime.Add(timeoutCommit)
-		newHeightRs.StartTime = cs.config.Commit(tmtime.Now())
-	} else {
-		newHeightRs.StartTime = cs.config.Commit(newHeightRs.CommitTime)
-	}
-
-	newHeightRs.Validators = validators
-	newHeightRs.Proposal = nil
-	newHeightRs.ProposalBlock = nil
-	newHeightRs.ProposalBlockParts = nil
-	newHeightRs.LockedRound = -1
-	newHeightRs.LockedBlock = nil
-	newHeightRs.LockedBlockParts = nil
-	newHeightRs.ValidRound = -1
-	newHeightRs.ValidBlock = nil
-	newHeightRs.ValidBlockParts = nil
-	newHeightRs.Votes = cstypes.NewHeightVoteSet(state.ChainID, height, validators)
-	newHeightRs.CommitRound = -1
-	newHeightRs.LastCommit = lastPrecommits
-	newHeightRs.LastValidators = state.LastValidators
-	newHeightRs.TriggeredTimeoutPrecommit = false
-
-	cs.state = state
-
-	// Finally, broadcast RoundState
-	cs.newStep(height)
 }
 
 func (cs *ConsensusState) newStep(height int64) {
