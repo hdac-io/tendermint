@@ -664,6 +664,7 @@ func NewNode(config *cfg.Config,
 
 	// make block executor for consensus and blockchain reactors to execute blocks
 	blockExec := sm.NewBlockExecutor(
+		blockStore,
 		stateDB,
 		logger.With("module", "state"),
 		proxyApp.Consensus(),

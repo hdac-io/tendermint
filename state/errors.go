@@ -1,6 +1,10 @@
 package state
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/hdac-io/tendermint/types"
+)
 
 type (
 	ErrInvalidBlock error
@@ -43,6 +47,12 @@ type (
 	ErrNoABCIResponsesForHeight struct {
 		Height int64
 	}
+
+	// ErrLastBlockIDMismatch requires from check to ValidateBlock error type
+	ErrLastBlockIDMismatch struct {
+		Expected types.BlockID
+		Got      types.BlockID
+	}
 )
 
 func (e ErrUnknownBlock) Error() string {
@@ -74,4 +84,11 @@ func (e ErrNoConsensusParamsForHeight) Error() string {
 
 func (e ErrNoABCIResponsesForHeight) Error() string {
 	return fmt.Sprintf("Could not find results for height #%d", e.Height)
+}
+
+func (e ErrLastBlockIDMismatch) Error() string {
+	return fmt.Sprintf("Wrong Block.Header.LastBlockID.  Expected %v, got %v",
+		e.Expected,
+		e.Got,
+	)
 }
