@@ -89,7 +89,7 @@ func DefaultBlockParams() BlockParams {
 // DefaultFridayBlockParams returns a specialized friday BlockParams.
 func DefaultFridayBlockParams() BlockParams {
 	param := DefaultBlockParams()
-	param.LenULB = 1
+	param.LenULB = 2
 	return param
 }
 
