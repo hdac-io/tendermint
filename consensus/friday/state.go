@@ -1613,7 +1613,10 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 
 	fail.Fail() // XXX
 
-	cs.cleanupFinalizedRoundState(height)
+	// clean up to ulb round state
+	if height > lenULB {
+		cs.cleanupFinalizedRoundState(height - lenULB)
+	}
 
 	// By here,
 	// * cs.Height has been increment to height+1
