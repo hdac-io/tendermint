@@ -1184,6 +1184,27 @@ func (cs *ConsensusState) createProposalBlock(height int64) (block *types.Block,
 	return cs.blockExec.CreateProposalBlockFromArgs(height, prevBlockID, prevTotalTxs, cs.state, commit, validators, appHash, resultsHash, proposerAddr)
 }
 
+func (cs *ConsensusState) validateProgressingPreviousBlock(block *types.Block) error {
+	previousHeight := block.Height - 1
+	if previousHeight > cs.state.LastBlockHeight {
+		prevRs := cs.GetRoundState(previousHeight)
+		if prevRs == nil {
+			//one more check if after commited
+			if previousHeight <= cs.state.LastBlockHeight {
+				return nil
+			} else {
+				return fmt.Errorf("cannot found RoundState at previous height")
+			}
+		}
+		prevID := types.BlockID{Hash: prevRs.ProposalBlock.Hash(), PartsHeader: prevRs.ProposalBlockParts.Header()}
+		if !block.LastBlockID.Equals(prevID) {
+			return &sm.ErrLastBlockIDMismatch{block.LastBlockID, prevID}
+		}
+	}
+
+	return nil
+}
+
 // Enter: `timeoutPropose` after entering Propose.
 // Enter: proposal block and POL is ready.
 // Prevote for LockedBlock if we're locked, or ProposalBlock if valid.
@@ -1241,6 +1262,24 @@ func (cs *ConsensusState) defaultDoPrevote(height int64, round int) {
 	if err != nil {
 		// ProposalBlock is invalid, prevote nil.
 		logger.Error("enterPrevote: ProposalBlock is invalid", "err", err)
+		switch err.(type) {
+		case *sm.ErrLastBlockIDMismatch:
+			heightRound.ValidRound = -1
+			heightRound.ValidBlock = nil
+			heightRound.ValidBlockParts = nil
+		}
+		cs.signAddVote(height, types.PrevoteType, nil, types.PartSetHeader{})
+		return
+	}
+
+	// Validate previous block if when progressing
+	err = cs.validateProgressingPreviousBlock(heightRound.ProposalBlock)
+	if err != nil {
+		// ProposalBlock is invalid, prevote nil.
+		logger.Error("enterPrevote: previous block is invalid", "err", err)
+		heightRound.ValidRound = -1
+		heightRound.ValidBlock = nil
+		heightRound.ValidBlockParts = nil
 		cs.signAddVote(height, types.PrevoteType, nil, types.PartSetHeader{})
 		return
 	}
@@ -1361,8 +1400,27 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 		logger.Info("enterPrecommit: +2/3 prevoted proposal block. Locking", "hash", blockID.Hash)
 		// Validate the block.
 		if err := cs.blockExec.ValidateBlock(cs.state, heightRound.ProposalBlock); err != nil {
+			switch err.(type) {
+			case *sm.ErrLastBlockIDMismatch:
+				heightRound.ValidRound = -1
+				heightRound.ValidBlock = nil
+				heightRound.ValidBlockParts = nil
+				cs.signAddVote(height, types.PrecommitType, nil, types.PartSetHeader{})
+				return
+			}
 			panic(fmt.Sprintf("enterPrecommit: +2/3 prevoted for an invalid block: %v", err))
 		}
+		// Validate previous block if when progressing
+		if err := cs.validateProgressingPreviousBlock(heightRound.ProposalBlock); err != nil {
+			// ProposalBlock is invalid, prevote nil.
+			logger.Error("enterPrecommit: previous block is invalid", "err", err)
+			heightRound.ValidRound = -1
+			heightRound.ValidBlock = nil
+			heightRound.ValidBlockParts = nil
+			cs.signAddVote(height, types.PrecommitType, nil, types.PartSetHeader{})
+			return
+		}
+
 		heightRound.LockedRound = round
 		heightRound.LockedBlock = heightRound.ProposalBlock
 		heightRound.LockedBlockParts = heightRound.ProposalBlockParts
@@ -1542,7 +1600,22 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 	}
 
 	if err := cs.blockExec.ValidateBlock(cs.state, block); err != nil {
-		panic(fmt.Sprintf("+2/3 committed an invalid block: %v", err))
+		switch err.(type) {
+		case *sm.ErrLastBlockIDMismatch:
+			cs.Logger.Info(fmt.Sprintf("finalizeCommit(%v): previous block is invalid. Unlocking. err=%v", height, err))
+			heightRound.LockedRound = -1
+			heightRound.LockedBlock = nil
+			heightRound.LockedBlockParts = nil
+			heightRound.CommitRound = -1
+			heightRound.CommitTime = time.Time{}
+
+			cs.eventBus.PublishEventUnlock(heightRound.RoundStateEvent())
+			cs.enterNewRound(height, heightRound.Round+1)
+			return
+
+		default:
+			panic(fmt.Sprintf("+2/3 committed an invalid block: %v", err))
+		}
 	}
 
 	cs.Logger.Info(fmt.Sprintf("Finalizing commit of block with %d txs", block.NumTxs),

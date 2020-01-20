@@ -456,7 +456,7 @@ func (h *Handshaker) replayBlock(state sm.State, height int64, proxyApp proxy.Ap
 	block := h.store.LoadBlock(height)
 	meta := h.store.LoadBlockMeta(height)
 
-	blockExec := sm.NewBlockExecutor(h.stateDB, h.logger, proxyApp, mock.Mempool{}, sm.MockEvidencePool{})
+	blockExec := sm.NewBlockExecutor(h.store, h.stateDB, h.logger, proxyApp, mock.Mempool{}, sm.MockEvidencePool{})
 	blockExec.SetEventBus(h.eventBus)
 
 	var err error
