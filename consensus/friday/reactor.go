@@ -504,10 +504,72 @@ OUTER_LOOP:
 			continue OUTER_LOOP
 		}
 
-		rs := conR.conS.GetRoundState(conR.conS.GetLastHeight() + 1)
-		prs := ps.GetRoundState(ps.Height)
+		// Gossip for progressing rounds
+		conR.conS.GetRoundStatesMap().Range(func(key, value interface{}) bool {
+			height := key.(int64)
+			// don't directly use value arg of map range method
+			// must be copy before using round state
+			rs := conR.conS.GetRoundState(height)
+			if rs == nil {
+				return true
+			}
 
-		// Send proposal Block parts?
+			prs := ps.GetRoundState(height)
+			if prs == nil {
+				return true
+			}
+
+			conR.gossipProgressingRound(height, rs, peer, ps, prs)
+			return true
+		})
+
+		// Gossip for catchup
+		ps.GetRoundStatesMap().Range(func(key, value interface{}) bool {
+			prsHeight := key.(int64)
+
+			if prsHeight > 0 && prsHeight <= conR.conS.GetLastHeight() {
+				prs := value.(*cstypes.PeerRoundState)
+
+				if prs.ProposalBlockParts == nil {
+					blockMeta := conR.conS.blockStore.LoadBlockMeta(prsHeight)
+					if blockMeta == nil {
+						panic(fmt.Sprintf("Failed to load block %d when blockStore is at %d",
+							prsHeight, conR.conS.blockStore.Height()))
+					}
+					ps.InitProposalBlockParts(prsHeight, blockMeta.BlockID.PartsHeader)
+					// continue the loop since prs is a copy and not effected by this initialization
+					return true
+				}
+
+				conR.gossipDataForCatchupPerPRS(prs, ps, peer)
+			}
+
+			return true
+		})
+
+		// Nothing to do. Sleep.
+		time.Sleep(conR.conS.config.PeerGossipSleepDuration)
+		continue OUTER_LOOP
+	}
+}
+
+func (conR *ConsensusReactor) gossipProgressingRound(
+	height int64,
+	rs *cstypes.RoundState,
+	peer p2p.Peer,
+	ps *PeerState,
+	prs *cstypes.PeerRoundState) {
+	logger := conR.Logger.With("peer", peer, "height", height)
+
+	// Gossip proposal block parts
+	go func(height int64, rs *cstypes.RoundState, prs *cstypes.PeerRoundState) {
+		if prs.ProposalBlockParts == nil {
+			if blockMeta := conR.conS.blockStore.LoadBlockMeta(rs.Height); blockMeta != nil {
+				ps.InitProposalBlockParts(rs.Height, blockMeta.BlockID.PartsHeader)
+				return
+			}
+		}
+
 		if rs.ProposalBlockParts.HasHeader(prs.ProposalBlockPartsHeader) {
 			if index, ok := rs.ProposalBlockParts.BitArray().Sub(prs.ProposalBlockParts.Copy()).PickRandom(); ok {
 				part := rs.ProposalBlockParts.GetPart(index)
@@ -516,51 +578,23 @@ OUTER_LOOP:
 					Round:  rs.Round,  // This tells peer that this part applies to us.
 					Part:   part,
 				}
-				logger.Debug("Sending block part", "height", prs.Height, "round", prs.Round)
+				logger.Debug("Sending block part", "round", prs.Round)
 				if peer.Send(DataChannel, cdc.MustMarshalBinaryBare(msg)) {
 					ps.SetHasProposalBlockPart(prs.Height, prs.Round, index)
 				}
-				continue OUTER_LOOP
+				return
 			}
 		}
+	}(height, rs, prs)
 
-		// If the peer is on a previous height, help catch up.
-		if (0 < prs.Height) && (prs.Height < rs.Height) {
-			heightLogger := logger.With("height", prs.Height)
-
-			// if we never received the commit message from the peer, the block parts wont be initialized
-			if prs.ProposalBlockParts == nil {
-				blockMeta := conR.conS.blockStore.LoadBlockMeta(prs.Height)
-				if blockMeta == nil {
-					panic(fmt.Sprintf("Failed to load block %d when blockStore is at %d",
-						prs.Height, conR.conS.blockStore.Height()))
-				}
-				ps.InitProposalBlockParts(rs.Height, blockMeta.BlockID.PartsHeader)
-				// continue the loop since prs is a copy and not effected by this initialization
-				continue OUTER_LOOP
-			}
-			conR.gossipDataForCatchup(heightLogger, rs, prs, ps, peer)
-			continue OUTER_LOOP
-		}
-
-		// If height and round don't match, sleep.
-		if (rs.Height != prs.Height) || (rs.Round != prs.Round) {
-			//logger.Info("Peer Height|Round mismatch, sleeping", "peerHeight", prs.Height, "peerRound", prs.Round, "peer", peer)
-			time.Sleep(conR.conS.config.PeerGossipSleepDuration)
-			continue OUTER_LOOP
-		}
-
-		// By here, height and round match.
-		// Proposal block parts were already matched and sent if any were wanted.
-		// (These can match on hash so the round doesn't matter)
-		// Now consider sending other things, like the Proposal itself.
-
+	//Gossip proposal
+	go func(height int64, rs *cstypes.RoundState, prs *cstypes.PeerRoundState) {
 		// Send Proposal && ProposalPOL BitArray?
 		if rs.Proposal != nil && !prs.Proposal {
 			// Proposal: share the proposal metadata with peer.
 			{
 				msg := &ProposalMessage{Proposal: rs.Proposal}
-				logger.Debug("Sending proposal", "height", prs.Height, "round", prs.Round)
+				logger.Debug("Sending proposal", "round", prs.Round)
 				if peer.Send(DataChannel, cdc.MustMarshalBinaryBare(msg)) {
 					// NOTE[ZM]: A peer might have received different proposal msg so this Proposal msg will be rejected!
 					ps.SetHasProposal(rs.Proposal)
@@ -576,27 +610,23 @@ OUTER_LOOP:
 					ProposalPOLRound: rs.Proposal.POLRound,
 					ProposalPOL:      rs.Votes.Prevotes(rs.Proposal.POLRound).BitArray(),
 				}
-				logger.Debug("Sending POL", "height", prs.Height, "round", prs.Round)
+				logger.Debug("Sending POL", "round", prs.Round)
 				peer.Send(DataChannel, cdc.MustMarshalBinaryBare(msg))
 			}
-			continue OUTER_LOOP
+			return
 		}
-
-		// Nothing to do. Sleep.
-		time.Sleep(conR.conS.config.PeerGossipSleepDuration)
-		continue OUTER_LOOP
-	}
+	}(height, rs, prs)
 }
 
-func (conR *ConsensusReactor) gossipDataForCatchup(logger log.Logger, rs *cstypes.RoundState,
-	prs *cstypes.PeerRoundState, ps *PeerState, peer p2p.Peer) {
+func (conR *ConsensusReactor) gossipDataForCatchupPerPRS(prs *cstypes.PeerRoundState, ps *PeerState, peer p2p.Peer) {
+	logger := conR.Logger.With("peer", peer, "height", prs.Height)
 
 	if index, ok := prs.ProposalBlockParts.Not().PickRandom(); ok {
 		// Ensure that the peer's PartSetHeader is correct
 		blockMeta := conR.conS.blockStore.LoadBlockMeta(prs.Height)
 		if blockMeta == nil {
 			logger.Error("Failed to load block meta",
-				"ourHeight", rs.Height, "blockstoreHeight", conR.conS.blockStore.Height())
+				"targetHeight", prs.Height, "blockstoreHeight", conR.conS.blockStore.Height())
 			time.Sleep(conR.conS.config.PeerGossipSleepDuration)
 			return
 		} else if !blockMeta.BlockID.PartsHeader.Equals(prs.ProposalBlockPartsHeader) {
