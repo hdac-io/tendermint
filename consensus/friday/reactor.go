@@ -765,82 +765,75 @@ OUTER_LOOP:
 			return
 		}
 
-		if ps.Height == 0 {
-			time.Sleep(conR.conS.config.PeerQueryMaj23SleepDuration)
-			continue OUTER_LOOP
-		}
+		commitedHeight := conR.conS.GetLastHeight()
+		ps.GetRoundStatesMap().Range(func(key, value interface{}) bool {
+			prsHeight := key.(int64)
 
-		// Maybe send Height/Round/Prevotes
-		{
-			rs := conR.conS.GetRoundState(conR.conS.GetLastHeight() + 1)
-			prs := ps.GetRoundState(ps.Height)
-			if rs.Height == prs.Height {
-				if maj23, ok := rs.Votes.Prevotes(prs.Round).TwoThirdsMajority(); ok {
+			if commitedHeight >= prsHeight {
+				// Maybe send Height/CatchupCommitRound/CatchupCommit.
+				prs := ps.GetRoundState(prsHeight)
+				if prs != nil && prs.CatchupCommitRound != -1 && 0 < prs.Height && prs.Height <= conR.conS.blockStore.Height() {
+					commit := conR.conS.LoadCommit(prs.Height)
 					peer.TrySend(StateChannel, cdc.MustMarshalBinaryBare(&VoteSetMaj23Message{
 						Height:  prs.Height,
-						Round:   prs.Round,
-						Type:    types.PrevoteType,
-						BlockID: maj23,
-					}))
-					time.Sleep(conR.conS.config.PeerQueryMaj23SleepDuration)
-				}
-			}
-		}
-
-		// Maybe send Height/Round/Precommits
-		{
-			rs := conR.conS.GetRoundState(conR.conS.GetLastHeight() + 1)
-			prs := ps.GetRoundState(ps.Height)
-			if rs.Height == prs.Height {
-				if maj23, ok := rs.Votes.Precommits(prs.Round).TwoThirdsMajority(); ok {
-					peer.TrySend(StateChannel, cdc.MustMarshalBinaryBare(&VoteSetMaj23Message{
-						Height:  prs.Height,
-						Round:   prs.Round,
+						Round:   commit.Round(),
 						Type:    types.PrecommitType,
-						BlockID: maj23,
+						BlockID: commit.BlockID,
 					}))
 					time.Sleep(conR.conS.config.PeerQueryMaj23SleepDuration)
 				}
-			}
-		}
+			} else {
+				rs := conR.conS.GetRoundState(prsHeight)
+				prs := ps.GetRoundState(ps.Height)
+				if rs == nil || prs == nil {
+					return true
+				}
 
-		// Maybe send Height/Round/ProposalPOL
-		{
-			rs := conR.conS.GetRoundState(conR.conS.GetLastHeight() + 1)
-			prs := ps.GetRoundState(ps.Height)
-			if rs.Height == prs.Height && prs.ProposalPOLRound >= 0 {
-				if maj23, ok := rs.Votes.Prevotes(prs.ProposalPOLRound).TwoThirdsMajority(); ok {
-					peer.TrySend(StateChannel, cdc.MustMarshalBinaryBare(&VoteSetMaj23Message{
-						Height:  prs.Height,
-						Round:   prs.ProposalPOLRound,
-						Type:    types.PrevoteType,
-						BlockID: maj23,
-					}))
-					time.Sleep(conR.conS.config.PeerQueryMaj23SleepDuration)
+				// Maybe send Height/Round/Prevotes
+				{
+					if maj23, ok := rs.Votes.Prevotes(prs.Round).TwoThirdsMajority(); ok {
+						peer.TrySend(StateChannel, cdc.MustMarshalBinaryBare(&VoteSetMaj23Message{
+							Height:  prs.Height,
+							Round:   prs.Round,
+							Type:    types.PrevoteType,
+							BlockID: maj23,
+						}))
+						time.Sleep(conR.conS.config.PeerQueryMaj23SleepDuration)
+					}
+				}
+
+				// Maybe send Height/Round/Precommits
+				{
+					if maj23, ok := rs.Votes.Precommits(prs.Round).TwoThirdsMajority(); ok {
+						peer.TrySend(StateChannel, cdc.MustMarshalBinaryBare(&VoteSetMaj23Message{
+							Height:  prs.Height,
+							Round:   prs.Round,
+							Type:    types.PrecommitType,
+							BlockID: maj23,
+						}))
+						time.Sleep(conR.conS.config.PeerQueryMaj23SleepDuration)
+					}
+				}
+
+				// Maybe send Height/Round/ProposalPOL
+				{
+					if prs.ProposalPOLRound >= 0 {
+						if maj23, ok := rs.Votes.Prevotes(prs.ProposalPOLRound).TwoThirdsMajority(); ok {
+							peer.TrySend(StateChannel, cdc.MustMarshalBinaryBare(&VoteSetMaj23Message{
+								Height:  prs.Height,
+								Round:   prs.ProposalPOLRound,
+								Type:    types.PrevoteType,
+								BlockID: maj23,
+							}))
+							time.Sleep(conR.conS.config.PeerQueryMaj23SleepDuration)
+						}
+					}
 				}
 			}
-		}
-
-		// Little point sending LastCommitRound/LastCommit,
-		// These are fleeting and non-blocking.
-
-		// Maybe send Height/CatchupCommitRound/CatchupCommit.
-		{
-			prs := ps.GetRoundState(ps.Height)
-			if prs.CatchupCommitRound != -1 && 0 < prs.Height && prs.Height <= conR.conS.blockStore.Height() {
-				commit := conR.conS.LoadCommit(prs.Height)
-				peer.TrySend(StateChannel, cdc.MustMarshalBinaryBare(&VoteSetMaj23Message{
-					Height:  prs.Height,
-					Round:   commit.Round(),
-					Type:    types.PrecommitType,
-					BlockID: commit.BlockID,
-				}))
-				time.Sleep(conR.conS.config.PeerQueryMaj23SleepDuration)
-			}
-		}
+			return true
+		})
 
 		time.Sleep(conR.conS.config.PeerQueryMaj23SleepDuration)
-
 		continue OUTER_LOOP
 	}
 }
