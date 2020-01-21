@@ -258,10 +258,6 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 		case *VoteSetMaj23Message:
 			cs := conR.conS
 
-			if cs.GetLastHeight()+1 != msg.Height {
-				return
-			}
-
 			heightRound := cs.GetRoundState(msg.Height)
 			if heightRound == nil {
 				return
@@ -323,15 +319,16 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 		switch msg := msg.(type) {
 		case *VoteMessage:
 			cs := conR.conS
-			height := cs.GetLastHeight() + 1
+			height := msg.Vote.Height
 			heightRound := cs.GetRoundState(height)
 			if heightRound == nil {
 				return
 			}
 			height, valSize, lastCommitSize := height, heightRound.Validators.Size(), heightRound.LastCommit.Size()
+			lenULB := conR.conS.state.ConsensusParams.Block.LenULB
 
 			ps.EnsureVoteBitArrays(height, valSize)
-			ps.EnsureVoteBitArrays(height-1, lastCommitSize)
+			ps.EnsureVoteBitArrays(height-lenULB, lastCommitSize)
 			ps.SetHasVote(msg.Vote)
 
 			cs.peerMsgQueue <- msgInfo{msg, src.ID()}
@@ -349,7 +346,7 @@ func (conR *ConsensusReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 		switch msg := msg.(type) {
 		case *VoteSetBitsMessage:
 			cs := conR.conS
-			height := cs.GetLastHeight() + 1
+			height := msg.Height
 			heightRound := cs.GetRoundState(height)
 			if heightRound == nil {
 				return
@@ -664,9 +661,6 @@ func (conR *ConsensusReactor) gossipDataForCatchupPerPRS(prs *cstypes.PeerRoundS
 func (conR *ConsensusReactor) gossipVotesRoutine(peer p2p.Peer, ps *PeerState) {
 	logger := conR.Logger.With("peer", peer)
 
-	// Simple hack to throttle logs upon sleep.
-	var sleeping = 0
-
 OUTER_LOOP:
 	for {
 		// Manage disconnects from self or peer.
@@ -675,63 +669,29 @@ OUTER_LOOP:
 			return
 		}
 
-		if ps.Height == 0 {
-			time.Sleep(conR.conS.config.PeerGossipSleepDuration)
-			goto OUTER_LOOP
-		}
+		ps.GetRoundStatesMap().Range(func(key, value interface{}) bool {
+			height := key.(int64)
+			commitedHeight := conR.conS.GetLastHeight()
 
-		rs := conR.conS.GetRoundState(conR.conS.GetLastHeight() + 1)
-		prs := ps.GetRoundState(ps.Height)
+			if height != 0 && height <= commitedHeight {
+				// for Catchup
+				commit := conR.conS.LoadCommit(height)
+				if ps.PickSendVote(commit) {
+					logger.Info("Picked Catchup commit to send", "height", height)
+				}
+				return true
 
-		switch sleeping {
-		case 1: // First sleep
-			sleeping = 2
-		case 2: // No more sleep
-			sleeping = 0
-		}
-
-		//logger.Debug("gossipVotesRoutine", "rsHeight", rs.Height, "rsRound", rs.Round,
-		//	"prsHeight", prs.Height, "prsRound", prs.Round, "prsStep", prs.Step)
-
-		// If height matches, then send LastCommit, Prevotes, Precommits.
-		if rs.Height == prs.Height {
-			heightLogger := logger.With("height", prs.Height)
-			if conR.gossipVotesForHeight(heightLogger, rs, prs, ps) {
-				continue OUTER_LOOP
+			} else if height != 0 && height > commitedHeight {
+				// for Progressing rounds
+				if rs, prs := conR.conS.GetRoundState(height), ps.GetRoundState(height); rs != nil && prs != nil {
+					heightLogger := logger.With("height", prs.Height)
+					conR.gossipVotesForHeight(heightLogger, rs, prs, ps)
+				}
+				return true
 			}
-		}
 
-		// Special catchup logic.
-		// If peer is lagging by height 1, send LastCommit.
-		if prs.Height != 0 && rs.Height == prs.Height+1 {
-			if ps.PickSendVote(rs.LastCommit) {
-				logger.Debug("Picked rs.LastCommit to send", "height", prs.Height)
-				continue OUTER_LOOP
-			}
-		}
-
-		// Catchup logic
-		// If peer is lagging by more than 1, send Commit.
-		if prs.Height != 0 && rs.Height >= prs.Height+2 {
-			// Load the block commit for prs.Height,
-			// which contains precommit signatures for prs.Height.
-			commit := conR.conS.blockStore.LoadBlockCommit(prs.Height)
-			if ps.PickSendVote(commit) {
-				logger.Debug("Picked Catchup commit to send", "height", prs.Height)
-				continue OUTER_LOOP
-			}
-		}
-
-		if sleeping == 0 {
-			// We sent nothing. Sleep...
-			sleeping = 1
-			logger.Debug("No votes to send, sleeping", "rs.Height", rs.Height, "prs.Height", prs.Height,
-				"localPV", rs.Votes.Prevotes(rs.Round).BitArray(), "peerPV", prs.Prevotes,
-				"localPC", rs.Votes.Precommits(rs.Round).BitArray(), "peerPC", prs.Precommits)
-		} else if sleeping == 2 {
-			// Continued sleep...
-			sleeping = 1
-		}
+			return false
+		})
 
 		time.Sleep(conR.conS.config.PeerGossipSleepDuration)
 		continue OUTER_LOOP
