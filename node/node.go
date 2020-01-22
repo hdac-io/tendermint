@@ -110,8 +110,18 @@ func DefaultNewNode(config *cfg.Config, logger log.Logger) (*Node, error) {
 		oldPV.Upgrade(newPrivValKey, newPrivValState)
 	}
 
+	var privVal types.PrivValidator
+	switch config.Consensus.Version {
+	case "tendermint":
+		privVal = privval.LoadOrGenFilePV(newPrivValKey, newPrivValState)
+	case "friday":
+		privVal = privval.LoadOrGenFridayFilePV(newPrivValKey, newPrivValState)
+	default:
+		return nil, fmt.Errorf("invalid consensus version %s", config.Consensus.Version)
+	}
+
 	return NewNode(config,
-		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
+		privVal,
 		nodeKey,
 		proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
 		DefaultGenesisDocProviderFunc(config),

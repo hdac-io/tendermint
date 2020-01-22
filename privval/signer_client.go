@@ -129,3 +129,9 @@ func (sc *SignerClient) SignProposal(chainID string, proposal *types.Proposal) e
 
 	return nil
 }
+
+// GetParallelProgressablePV implements PrivValidator. SignerClient cannot support.
+// TODO: support remote signer for friday
+func (sc *SignerClient) GetParallelProgressablePV() types.ParallelProgressablePV {
+	return nil
+}

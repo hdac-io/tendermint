@@ -14,9 +14,15 @@ import (
 type PrivValidator interface {
 	// TODO: Extend the interface to return errors too. Issue: https://github.com/tendermint/tendermint/issues/3602
 	GetPubKey() crypto.PubKey
+	GetParallelProgressablePV() ParallelProgressablePV // It returns nil if unsupport to Parallel Progress
 
 	SignVote(chainID string, vote *Vote) error
 	SignProposal(chainID string, proposal *Proposal) error
+}
+
+// ParallelProgressablePV define the functionality of signable by multiple progressing height
+type ParallelProgressablePV interface {
+	SetImmutableHeight(height int64) error
 }
 
 //----------------------------------------
@@ -95,6 +101,11 @@ func (pv *MockPV) SignProposal(chainID string, proposal *Proposal) error {
 	return nil
 }
 
+// Implements PrivValidator.
+func (pv *MockPV) GetParallelProgressablePV() ParallelProgressablePV {
+	return nil
+}
+
 // String returns a string representation of the MockPV.
 func (pv *MockPV) String() string {
 	addr := pv.GetPubKey().Address()
@@ -121,6 +132,11 @@ func (pv *erroringMockPV) SignVote(chainID string, vote *Vote) error {
 // Implements PrivValidator.
 func (pv *erroringMockPV) SignProposal(chainID string, proposal *Proposal) error {
 	return ErroringMockPVErr
+}
+
+// Implements PrivValidator.
+func (pv *erroringMockPV) GetParallelProgressablePV() ParallelProgressablePV {
+	return nil
 }
 
 // NewErroringMockPV returns a MockPV that fails on each signing request. Again, for testing only.
