@@ -301,6 +301,10 @@ func (cs *ConsensusState) GetValidators() (int64, []*types.Validator) {
 // SetPrivValidator sets the private validator account for signing votes.
 func (cs *ConsensusState) SetPrivValidator(priv types.PrivValidator) {
 	cs.mtx.Lock()
+	if pppv := priv.GetParallelProgressablePV(); pppv == nil {
+		panic(fmt.Sprintf("Unexpected PrivValidator type. cannot suppported parallel progressable. got %v", reflect.TypeOf(priv)))
+	}
+
 	cs.privValidator = priv
 	cs.mtx.Unlock()
 }
@@ -553,6 +557,9 @@ func (cs *ConsensusState) cleanupFinalizedRoundState(height int64) {
 	}
 	cs.roundStates.Delete(height)
 	cs.timeoutTickers.Delete(height)
+	if err := cs.privValidator.GetParallelProgressablePV().SetImmutableHeight(height); err != nil {
+		panic(err)
+	}
 }
 
 func (cs *ConsensusState) updateRoundStep(height int64, round int, step cstypes.RoundStepType) {

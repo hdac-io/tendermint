@@ -251,6 +251,11 @@ func (pv *FilePV) SignProposal(chainID string, proposal *types.Proposal) error {
 	return nil
 }
 
+// GetParallelProgressablePV implements PrivValidator. default FilePV cannot support.
+func (pv *FilePV) GetParallelProgressablePV() types.ParallelProgressablePV {
+	return nil
+}
+
 // Save persists the FilePV to disk.
 func (pv *FilePV) Save() {
 	pv.Key.Save()

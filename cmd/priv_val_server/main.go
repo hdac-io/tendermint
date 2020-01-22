@@ -33,6 +33,7 @@ func main() {
 		"privStatePath", *privValStatePath,
 	)
 
+	// TODO: select to default FilePV or fridayFilePV
 	pv := privval.LoadFilePV(*privValKeyPath, *privValStatePath)
 
 	var dialer privval.SocketDialer
