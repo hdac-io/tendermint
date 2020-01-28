@@ -964,6 +964,12 @@ func (cs *ConsensusState) enterNewRound(height int64, round int) {
 		// for round 0.
 	} else {
 		logger.Info("Resetting Proposal info")
+
+		// Unlocking txs if exist proposal block at previous round
+		if heightRound.ProposalBlock != nil {
+			cs.blockExec.UnreserveBlock(cs.state, heightRound.ProposalBlock)
+		}
+
 		heightRound.Proposal = nil
 		heightRound.ProposalBlock = nil
 		heightRound.ProposalBlockParts = nil
@@ -1835,6 +1841,8 @@ func (cs *ConsensusState) addProposalBlockPart(msg *BlockPartMessage, peerID p2p
 		// NOTE: it's possible to receive complete proposal blocks for future rounds without having the proposal
 		cs.Logger.Info("Received complete proposal block", "height", heightRound.ProposalBlock.Height, "hash", heightRound.ProposalBlock.Hash())
 		cs.eventBus.PublishEventCompleteProposal(heightRound.CompleteProposalEvent())
+
+		cs.blockExec.ReserveBlock(cs.state, heightRound.ProposalBlock)
 
 		cs.scheduleNewHeightRound0(height + 1)
 
