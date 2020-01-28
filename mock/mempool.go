@@ -24,6 +24,8 @@ func (Mempool) CheckTxWithInfo(_ types.Tx, _ func(*abci.Response),
 }
 func (Mempool) ReapMaxBytesMaxGas(_, _ int64) types.Txs { return types.Txs{} }
 func (Mempool) ReapMaxTxs(n int) types.Txs              { return types.Txs{} }
+func (Mempool) Reserve(blockTxs types.Txs)              {}
+func (Mempool) Unreserve(blockTxs types.Txs)            {}
 func (Mempool) Update(
 	_ int64,
 	_ types.Txs,

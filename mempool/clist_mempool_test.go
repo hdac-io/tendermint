@@ -89,6 +89,30 @@ func checkTxs(t *testing.T, mempool Mempool, count int, peerID uint16) types.Txs
 	return txs
 }
 
+func TestReserve(t *testing.T) {
+	app := kvstore.NewKVStoreApplication()
+	cc := proxy.NewLocalClientCreator(app)
+	mempool, cleanup := newMempoolWithApp(cc)
+	defer cleanup()
+
+	checkTxs(t, mempool, 1, UnknownPeerID)
+	tx0 := mempool.TxsFront().Value.(*mempoolTx)
+
+	prevTxs := mempool.ReapMaxTxs(10)
+	assert.NotEqual(t, len(prevTxs), 0)
+
+	mempool.Reserve([]types.Tx{tx0.tx})
+	ReservedTxs := mempool.ReapMaxTxs(10)
+	assert.Equal(t, len(ReservedTxs), len(prevTxs)-1)
+	for _, tx := range ReservedTxs {
+		assert.NotEqual(t, tx, tx0.tx)
+	}
+
+	mempool.Unreserve([]types.Tx{tx0.tx})
+	unreservedTxs := mempool.ReapMaxTxs(10)
+	assert.Equal(t, len(unreservedTxs), len(prevTxs))
+}
+
 func TestReapMaxBytesMaxGas(t *testing.T) {
 	app := kvstore.NewKVStoreApplication()
 	cc := proxy.NewLocalClientCreator(app)

@@ -40,6 +40,12 @@ type Mempool interface {
 	// Unlock unlocks the mempool.
 	Unlock()
 
+	// Reserve Update marking reserve the mempool that the given txs were received proposal block.
+	Reserve(blockTxs types.Txs)
+
+	// Unreserve Update unmarking reserve the mempool that the given txs were previous failed round proposal block.
+	Unreserve(blockTxs types.Txs)
+
 	// Update informs the mempool that the given txs were committed and can be discarded.
 	// NOTE: this should be called *after* block is committed by consensus.
 	// NOTE: unsafe; Lock/Unlock must be managed by caller
