@@ -542,6 +542,12 @@ func (cs *ConsensusState) updateNewHeight(height int64) bool {
 		},
 	)
 
+	if _, hasTicker := cs.timeoutTickers.Load(height); !hasTicker {
+		cs.timeoutTickers.Store(height, NewTimeoutTicker(cs.aggregatedTockChan))
+		ticker, _ := cs.timeoutTickers.Load(height)
+		ticker.(TimeoutTicker).Start()
+	}
+
 	// Finally, broadcast RoundState
 	cs.newStep(height)
 
@@ -592,12 +598,6 @@ func (cs *ConsensusState) scheduleNewHeightRound0(height int64) {
 // enterNewRound(height, 0) at cs.StartTime.
 func (cs *ConsensusState) scheduleRound0(rs *cstypes.RoundState) {
 	//cs.Logger.Info("scheduleRound0", "now", tmtime.Now(), "startTime", cs.StartTime)
-	if _, hasTicker := cs.timeoutTickers.Load(rs.Height); !hasTicker {
-		cs.timeoutTickers.Store(rs.Height, NewTimeoutTicker(cs.aggregatedTockChan))
-		ticker, _ := cs.timeoutTickers.Load(rs.Height)
-		ticker.(TimeoutTicker).Start()
-	}
-
 	sleepDuration := rs.StartTime.Sub(tmtime.Now())
 	cs.scheduleTimeout(sleepDuration, rs.Height, 0, cstypes.RoundStepNewHeight)
 }
