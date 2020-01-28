@@ -52,6 +52,10 @@ func (cs *ConsensusState) readReplayMessage(msg *TimedWALMessage, newStepSub typ
 	switch m := msg.Msg.(type) {
 	case types.EventDataRoundState:
 		cs.Logger.Info("Replay: New Step", "height", m.Height, "round", m.Round, "step", m.Step)
+		if cs.state.LastBlockHeight <= m.Height {
+			cs.updateHeight(m.Height)
+		}
+
 		// these are playback checks
 		ticker := time.After(time.Second * 2)
 		if newStepSub != nil {
@@ -416,8 +420,11 @@ func (h *Handshaker) replayBlocks(state sm.State, proxyApp proxy.AppConns, appBl
 	//
 	// If mutateState == true, the final block is replayed with h.replayBlock()
 
-	var appHash []byte
+	appHash := make([][]byte, state.ConsensusParams.Block.LenULB)
 	var err error
+
+	lenULB := state.ConsensusParams.Block.LenULB
+
 	finalBlock := storeBlockHeight
 	if mutateState {
 		finalBlock--
@@ -426,11 +433,13 @@ func (h *Handshaker) replayBlocks(state sm.State, proxyApp proxy.AppConns, appBl
 		h.logger.Info("Applying block", "height", i)
 		block := h.store.LoadBlock(i)
 		// Extra check to ensure the app was not changed in a way it shouldn't have.
-		if len(appHash) > 0 {
-			assertAppHashEqualsOneFromBlock(appHash, block)
+		if len(appHash[0]) > 0 {
+			assertAppHashEqualsOneFromBlock(appHash[0], block)
 		}
 
-		appHash, err = sm.ExecCommitBlock(proxyApp.Consensus(), block, h.logger, h.stateDB, state.ConsensusParams.Block.LenULB)
+		appHash = appHash[1:]
+		execedAppHash, err := sm.ExecCommitBlock(proxyApp.Consensus(), block, h.logger, h.stateDB, lenULB)
+		appHash = append(appHash, execedAppHash)
 		if err != nil {
 			return nil, err
 		}
@@ -444,11 +453,12 @@ func (h *Handshaker) replayBlocks(state sm.State, proxyApp proxy.AppConns, appBl
 		if err != nil {
 			return nil, err
 		}
-		appHash = state.AppHash
+		// TODO: check update ulb length from consensusParams
+		appHash[lenULB-1] = state.AppHash
 	}
 
-	assertAppHashEqualsOneFromState(appHash, state)
-	return appHash, nil
+	assertAppHashEqualsOneFromState(appHash[lenULB-1], state)
+	return appHash[lenULB-1], nil
 }
 
 // ApplyBlock on the proxyApp with the last block.
