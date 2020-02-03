@@ -61,6 +61,8 @@ type BlockchainReactor struct {
 	fsm          *BcReactorFSM
 	blocksSynced int
 
+	poolVersion string
+
 	// Receive goroutine forwards messages to this channel to be processed in the context of the poolRoutine.
 	messagesForFSMCh chan bcReactorMessage
 
@@ -96,6 +98,7 @@ func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *st
 		blockExec:        blockExec,
 		fastSync:         fastSync,
 		store:            store,
+		poolVersion:      poolVersion,
 		messagesForFSMCh: messagesForFSMCh,
 		eventsFromFSMCh:  eventsFromFSMCh,
 		errorsForFSMCh:   errorsForFSMCh,
@@ -427,7 +430,14 @@ func (bcR *BlockchainReactor) processBlock() error {
 		return errBlockVerificationFailure
 	}
 
-	bcR.store.SaveBlock(first, firstParts, second.LastCommit, 1)
+	switch bcR.poolVersion {
+	case "tendermint":
+		bcR.store.SaveBlock(first, firstParts, second.LastCommit, 1)
+	case "friday":
+		bcR.store.SaveBlock(first, firstParts, second.LastCommit, bcR.state.ConsensusParams.Block.LenULB)
+	default:
+		panic(fmt.Sprintf("unknown pool version %s", bcR.poolVersion))
+	}
 
 	bcR.state, err = bcR.blockExec.ApplyBlock(bcR.state, firstID, first)
 	if err != nil {
@@ -520,6 +530,7 @@ func (bcR *BlockchainReactor) resetStateTimer(name string, timer **time.Timer, t
 // BlockchainMessage is a generic message for this reactor.
 type BlockchainMessage interface {
 	ValidateBasic() error
+	ValidateFridayBasic() error
 }
 
 // RegisterBlockchainMessages registers the fast sync messages for amino encoding.
@@ -554,6 +565,11 @@ func (m *bcBlockRequestMessage) ValidateBasic() error {
 	return nil
 }
 
+// ValidateFridayBasic performs basic validation.
+func (m *bcBlockRequestMessage) ValidateFridayBasic() error {
+	return m.ValidateBasic()
+}
+
 func (m *bcBlockRequestMessage) String() string {
 	return fmt.Sprintf("[bcBlockRequestMessage %v]", m.Height)
 }
@@ -570,6 +586,11 @@ func (m *bcNoBlockResponseMessage) ValidateBasic() error {
 	return nil
 }
 
+// ValidateFridayBasic performs basic validation.
+func (m *bcNoBlockResponseMessage) ValidateFridayBasic() error {
+	return m.ValidateBasic()
+}
+
 func (m *bcNoBlockResponseMessage) String() string {
 	return fmt.Sprintf("[bcNoBlockResponseMessage %d]", m.Height)
 }
@@ -583,6 +604,11 @@ type bcBlockResponseMessage struct {
 // ValidateBasic performs basic validation.
 func (m *bcBlockResponseMessage) ValidateBasic() error {
 	return m.Block.ValidateBasic()
+}
+
+// ValidateFridayBasic performs basic validation(specialized for friday).
+func (m *bcBlockResponseMessage) ValidateFridayBasic() error {
+	return m.Block.ValidateFridayBasic()
 }
 
 func (m *bcBlockResponseMessage) String() string {
@@ -603,6 +629,11 @@ func (m *bcStatusRequestMessage) ValidateBasic() error {
 	return nil
 }
 
+// ValidateFridayBasic performs basic validation.
+func (m *bcStatusRequestMessage) ValidateFridayBasic() error {
+	return m.ValidateBasic()
+}
+
 func (m *bcStatusRequestMessage) String() string {
 	return fmt.Sprintf("[bcStatusRequestMessage %v]", m.Height)
 }
@@ -619,6 +650,11 @@ func (m *bcStatusResponseMessage) ValidateBasic() error {
 		return errors.New("negative Height")
 	}
 	return nil
+}
+
+// ValidateFridayBasic performs basic validation.
+func (m *bcStatusResponseMessage) ValidateFridayBasic() error {
+	return m.ValidateBasic()
 }
 
 func (m *bcStatusResponseMessage) String() string {
