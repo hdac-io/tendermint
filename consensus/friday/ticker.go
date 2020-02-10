@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	tickTockBufferSize = 10
+	tickTockBufferSize = 100
 )
 
 // TimeoutTicker is a timer that schedules timeouts
