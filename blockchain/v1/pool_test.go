@@ -48,6 +48,10 @@ func (testR *testBcR) switchToConsensus() {
 
 }
 
+func (testR *testBcR) lenULB() int64 {
+	return 0
+}
+
 func newTestBcR() *testBcR {
 	testBcR := &testBcR{logger: log.TestingLogger()}
 	return testBcR

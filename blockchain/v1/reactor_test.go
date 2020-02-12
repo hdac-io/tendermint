@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pkg/errors"
-	"github.com/stretchr/testify/assert"
 	abci "github.com/hdac-io/tendermint/abci/types"
 	cfg "github.com/hdac-io/tendermint/config"
 	"github.com/hdac-io/tendermint/libs/log"
@@ -20,6 +18,8 @@ import (
 	"github.com/hdac-io/tendermint/store"
 	"github.com/hdac-io/tendermint/types"
 	tmtime "github.com/hdac-io/tendermint/types/time"
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
 	dbm "github.com/tendermint/tm-db"
 )
 
@@ -39,9 +39,10 @@ func randGenesisDoc(numValidators int, randPower bool, minPower int64) (*types.G
 	sort.Sort(types.PrivValidatorsByAddress(privValidators))
 
 	return &types.GenesisDoc{
-		GenesisTime: tmtime.Now(),
-		ChainID:     config.ChainID(),
-		Validators:  validators,
+		GenesisTime:     tmtime.Now(),
+		ChainID:         config.ChainID(),
+		Validators:      validators,
+		ConsensusParams: types.DefaultConsensusParams(),
 	}, privValidators
 }
 
@@ -95,7 +96,7 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 	// pool.height is determined from the store.
 	fastSync := true
 	db := dbm.NewMemDB()
-	blockExec := sm.NewBlockExecutor(db, log.TestingLogger(), proxyApp.Consensus(),
+	blockExec := sm.NewBlockExecutor(blockStore, db, log.TestingLogger(), proxyApp.Consensus(),
 		mock.Mempool{}, sm.MockEvidencePool{})
 	sm.SaveState(db, state)
 
@@ -120,10 +121,10 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 			panic(errors.Wrap(err, "error apply block"))
 		}
 
-		blockStore.SaveBlock(thisBlock, thisParts, lastCommit)
+		blockStore.SaveBlock(thisBlock, thisParts, lastCommit, 1)
 	}
 
-	bcReactor := NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync)
+	bcReactor := NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync, "tendermint")
 	bcReactor.SetLogger(logger.With("module", "blockchain"))
 
 	return bcReactor
