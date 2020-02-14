@@ -113,7 +113,7 @@ func (blockExec *BlockExecutor) CreateProposalBlockFromArgs(
 	prevBlockID types.BlockID,
 	prevBlockTotalTxs int64,
 	state State,
-	commit *types.Commit, validators *types.ValidatorSet,
+	ulbCommit *types.Commit, ulbValidators *types.ValidatorSet,
 	appHash []byte, resultsHash []byte,
 	proposerAddr []byte,
 ) (*types.Block, *types.PartSet) {
@@ -129,7 +129,7 @@ func (blockExec *BlockExecutor) CreateProposalBlockFromArgs(
 	maxDataBytes := types.MaxDataBytes(maxBytes, state.Validators.Size(), len(evidence))
 	txs := blockExec.mempool.ReapMaxBytesMaxGas(maxDataBytes, maxGas)
 
-	return state.MakeBlockFromArgs(height, txs, prevBlockID, prevBlockTotalTxs, commit, validators, evidence, proposerAddr, appHash, resultsHash)
+	return state.MakeBlockFromArgs(height, txs, prevBlockID, prevBlockTotalTxs, ulbCommit, ulbValidators, evidence, proposerAddr, appHash, resultsHash)
 }
 
 // ValidateBlock validates the given block against the given state.

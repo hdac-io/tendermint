@@ -1137,22 +1137,22 @@ func (cs *ConsensusState) isProposalComplete(height int64) bool {
 // Returns nil block upon error.
 // NOTE: keep it side-effect free for clarity.
 func (cs *ConsensusState) createProposalBlock(height int64) (block *types.Block, blockParts *types.PartSet) {
-	var commit *types.Commit
-	var validators *types.ValidatorSet
+	var ulbCommit *types.Commit
+	var ulbValidators *types.ValidatorSet
 	var appHash []byte
 	var resultsHash []byte
 
 	if height <= cs.state.ConsensusParams.Block.LenULB {
 		// We're creating a proposal for the previous ULB block.
 		// The commit is empty, but not nil.
-		commit = types.NewCommit(types.BlockID{}, nil)
-		validators = types.NewValidatorSet(nil)
+		ulbCommit = types.NewCommit(types.BlockID{}, nil)
+		ulbValidators = types.NewValidatorSet(nil)
 	} else if rs := cs.getRoundState(height); rs != nil && rs.LastCommit.HasTwoThirdsMajority() {
 		ulbHeight := height - cs.state.ConsensusParams.Block.LenULB
 
 		// Make the commit from ULBCommit
-		commit = rs.LastCommit.MakeCommit()
-		validators = rs.LastValidators
+		ulbCommit = rs.LastCommit.MakeCommit()
+		ulbValidators = rs.LastValidators
 
 		// Getting committed block informations from db
 		var appHashErr error
@@ -1194,7 +1194,7 @@ func (cs *ConsensusState) createProposalBlock(height int64) (block *types.Block,
 	}
 
 	proposerAddr := cs.privValidator.GetPubKey().Address()
-	return cs.blockExec.CreateProposalBlockFromArgs(height, prevBlockID, prevTotalTxs, cs.state, commit, validators, appHash, resultsHash, proposerAddr)
+	return cs.blockExec.CreateProposalBlockFromArgs(height, prevBlockID, prevTotalTxs, cs.state, ulbCommit, ulbValidators, appHash, resultsHash, proposerAddr)
 }
 
 func (cs *ConsensusState) validateProgressingPreviousBlock(block *types.Block) error {

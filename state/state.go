@@ -167,7 +167,7 @@ func (state State) MakeBlockFromArgs(
 	txs []types.Tx,
 	prevBlockID types.BlockID,
 	prevBlockTotalTxs int64,
-	commit *types.Commit, validators *types.ValidatorSet, //Pair matched Commit and ValidatorSet
+	ulbCommit *types.Commit, ulbValidators *types.ValidatorSet, //Pair matched Commit and ValidatorSet
 	evidence []types.Evidence,
 	proposerAddress []byte,
 	appHash []byte,
@@ -175,14 +175,14 @@ func (state State) MakeBlockFromArgs(
 ) (*types.Block, *types.PartSet) {
 
 	// Build base block with block data.
-	block := types.MakeBlock(height, txs, commit, evidence)
+	block := types.MakeBlock(height, txs, ulbCommit, evidence)
 
 	// Set time.
 	var timestamp time.Time
 	if height == 1 {
 		timestamp = state.LastBlockTime // genesis time
 	} else {
-		timestamp = MedianTime(commit, validators)
+		timestamp = MedianTime(ulbCommit, ulbValidators)
 	}
 	//TODO : fix state.Validators, .NextValidators, .ConsensusParams -> getting from persistant db
 	// Fill rest of header with state data.
