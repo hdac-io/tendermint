@@ -107,11 +107,20 @@ func fridayValidateBlock(store BlockStore, evidencePool EvidencePool, stateDB db
 			block.ValidatorsHash,
 		)
 	}
-	if !bytes.Equal(block.NextValidatorsHash, state.NextValidators.Hash()) {
-		return fmt.Errorf("Wrong Block.Header.NextValidatorsHash.  Expected %X, got %v",
-			state.NextValidators.Hash(),
-			block.NextValidatorsHash,
-		)
+
+	if block.Height >= lenULB+1 {
+		ulbNextValHeight := block.Height + 1
+		ulbNextValidators, ulbNextValErr := LoadValidators(stateDB, ulbNextValHeight)
+		if ulbNextValErr != nil {
+			return fmt.Errorf("Cannot load validators. err=%v", ulbNextValErr)
+		}
+
+		if !bytes.Equal(block.NextValidatorsHash, ulbNextValidators.Hash()) {
+			return fmt.Errorf("Wrong Block.Header.NextValidatorsHash.  Expected %X, got %v",
+				ulbNextValidators.Hash(),
+				block.NextValidatorsHash,
+			)
+		}
 	}
 
 	if block.Height <= lenULB {

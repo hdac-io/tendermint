@@ -171,6 +171,7 @@ func (state State) MakeBlockFromArgs(
 	evidence []types.Evidence,
 	proposerAddress []byte,
 	validatorsHash []byte,
+	ulbNextValidatorsHash []byte,
 	appHash []byte,
 	resultsHash []byte,
 ) (*types.Block, *types.PartSet) {
@@ -190,7 +191,7 @@ func (state State) MakeBlockFromArgs(
 	block.Header.Populate(
 		state.Version.Consensus, state.ChainID,
 		timestamp, prevBlockID, prevBlockTotalTxs+block.NumTxs,
-		validatorsHash, state.NextValidators.Hash(),
+		validatorsHash, ulbNextValidatorsHash,
 		state.ConsensusParams.Hash(), appHash, resultsHash,
 		proposerAddress,
 	)

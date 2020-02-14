@@ -1140,6 +1140,7 @@ func (cs *ConsensusState) createProposalBlock(height int64) (block *types.Block,
 	var ulbCommit *types.Commit
 	var ulbValidators *types.ValidatorSet
 	var validators *types.ValidatorSet
+	var ulbNextValidators *types.ValidatorSet
 	var appHash []byte
 	var resultsHash []byte
 
@@ -1153,6 +1154,7 @@ func (cs *ConsensusState) createProposalBlock(height int64) (block *types.Block,
 		// The commit is empty, but not nil.
 		ulbCommit = types.NewCommit(types.BlockID{}, nil)
 		ulbValidators = types.NewValidatorSet(nil)
+		ulbNextValidators = types.NewValidatorSet(nil)
 	} else if rs := cs.getRoundState(height); rs != nil && rs.LastCommit.HasTwoThirdsMajority() {
 		ulbHeight := height - cs.state.ConsensusParams.Block.LenULB
 
@@ -1171,6 +1173,13 @@ func (cs *ConsensusState) createProposalBlock(height int64) (block *types.Block,
 			panic(fmt.Sprintf("Cannot load ulb ABCI responses. ulbHeight=%v, LastBlockHeight=%v, error=%v", ulbHeight, cs.state.LastBlockHeight, resErr.Error()))
 		}
 		resultsHash = ulbABCIResponses.ResultsHash()
+
+		nextValidatorsHeight := ulbHeight + cs.state.ConsensusParams.Block.LenULB + 1
+		var ulbNextVarErr error
+		ulbNextValidators, ulbNextVarErr = sm.LoadValidators(cs.blockExec.DB(), nextValidatorsHeight)
+		if ulbNextVarErr != nil {
+			panic(fmt.Sprintf("Cannot load ulb NextValidators. NextValidatorHeight=%v, LastBlockHeight=%v, error=%v", nextValidatorsHeight, cs.state.LastBlockHeight, ulbNextVarErr.Error()))
+		}
 	} else {
 		// This shouldn't happen.
 		cs.Logger.Error("enterPropose: Cannot propose anything: No commit for the previous block.", "height", height)
@@ -1205,7 +1214,7 @@ func (cs *ConsensusState) createProposalBlock(height int64) (block *types.Block,
 		prevBlockID, prevTotalTxs,
 		cs.state,
 		ulbCommit, ulbValidators,
-		validators.Hash(), appHash, resultsHash,
+		validators.Hash(), ulbNextValidators.Hash(), appHash, resultsHash,
 		proposerAddr)
 }
 

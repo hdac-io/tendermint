@@ -98,6 +98,13 @@ func SaveState(db dbm.DB, state State) {
 }
 
 func saveState(db dbm.DB, state State, key []byte) {
+	// It means when running friday consensus
+	// TODO: refactor to package seperation
+	if state.ConsensusParams.Block.LenULB != 0 {
+		saveFridayState(db, state, key)
+		return
+	}
+
 	nextHeight := state.LastBlockHeight + 1
 	// If first block, save validators for block 1.
 	if nextHeight == 1 {
@@ -109,6 +116,29 @@ func saveState(db dbm.DB, state State, key []byte) {
 	// Save next validators.
 	saveValidatorsInfo(db, nextHeight+1, state.LastHeightValidatorsChanged, state.NextValidators)
 	// Save next consensus params.
+	saveConsensusParamsInfo(db, nextHeight, state.LastHeightConsensusParamsChanged, state.ConsensusParams)
+	// Save current app hash
+	saveAppHash(db, state.LastBlockHeight, state.AppHash)
+
+	db.SetSync(key, state.Bytes())
+}
+
+func saveFridayState(db dbm.DB, state State, key []byte) {
+	nextHeight := state.LastBlockHeight + 1
+	// If first block, save validators for block 1.
+	if nextHeight == 1 {
+		// This extra logic due to Tendermint validator set changes being delayed 1 block.
+		// It may get overwritten due to InitChain validator updates.
+		lastHeightVoteChanged := int64(1)
+		for delayHeight := nextHeight; delayHeight <= state.ConsensusParams.Block.LenULB; delayHeight++ {
+			saveValidatorsInfo(db, delayHeight, lastHeightVoteChanged, state.Validators)
+		}
+	}
+
+	// Save next validators.
+	saveValidatorsInfo(db, nextHeight+state.ConsensusParams.Block.LenULB, state.LastHeightValidatorsChanged, state.NextValidators)
+	// Save next consensus params.
+	// TODO: change delay distance to after ULB distance
 	saveConsensusParamsInfo(db, nextHeight, state.LastHeightConsensusParamsChanged, state.ConsensusParams)
 	// Save current app hash
 	saveAppHash(db, state.LastBlockHeight, state.AppHash)
