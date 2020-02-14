@@ -114,7 +114,7 @@ func (blockExec *BlockExecutor) CreateProposalBlockFromArgs(
 	prevBlockTotalTxs int64,
 	state State,
 	ulbCommit *types.Commit, ulbValidators *types.ValidatorSet,
-	validatorsHash []byte, appHash []byte, resultsHash []byte,
+	validatorsHash []byte, ulbNextValidatorsHash []byte, appHash []byte, resultsHash []byte,
 	proposerAddr []byte,
 ) (*types.Block, *types.PartSet) {
 
@@ -136,7 +136,7 @@ func (blockExec *BlockExecutor) CreateProposalBlockFromArgs(
 		ulbCommit, ulbValidators,
 		evidence,
 		proposerAddr,
-		validatorsHash, appHash, resultsHash)
+		validatorsHash, ulbNextValidatorsHash, appHash, resultsHash)
 }
 
 // ValidateBlock validates the given block against the given state.
@@ -215,6 +215,82 @@ func (blockExec *BlockExecutor) ApplyBlock(state State, blockID types.BlockID, b
 
 	// Update the state with the block and responses.
 	state, err = updateState(state, blockID, &block.Header, abciResponses, validatorUpdates)
+	if err != nil {
+		return state, fmt.Errorf("Commit failed for application: %v", err)
+	}
+
+	// Lock mempool, commit app state, update mempoool.
+	appHash, err := blockExec.Commit(state, block, abciResponses.DeliverTx)
+	if err != nil {
+		return state, fmt.Errorf("Commit failed for application: %v", err)
+	}
+
+	// Update evpool with the block and state.
+	blockExec.evpool.Update(block, state)
+
+	fail.Fail() // XXX
+
+	// Update the app hash and save the state.
+	state.AppHash = appHash
+	SaveState(blockExec.db, state)
+
+	fail.Fail() // XXX
+
+	// Events are fired after everything else.
+	// NOTE: if we crash between Commit and Save, events wont be fired during replay
+	fireEvents(blockExec.logger, blockExec.eventBus, block, abciResponses, validatorUpdates)
+
+	return state, nil
+}
+
+// ApplyFridayBlock validates the block against the state, executes it against the app,
+// fires the relevant events, commits the app, and saves the new state and responses.
+// It's the only function that needs to be called
+// from outside this package to process and commit an entire block.
+// It takes a blockID to avoid recomputing the parts hash.
+// NOTE: changed updateState to specialized for friday
+func (blockExec *BlockExecutor) ApplyFridayBlock(state State, blockID types.BlockID, block *types.Block) (State, error) {
+
+	if err := blockExec.ValidateBlock(state, block); err != nil {
+		return state, ErrInvalidBlock(err)
+	}
+
+	startTime := time.Now().UnixNano()
+	commitDistance := int64(1)
+	if state.ConsensusParams.Block.LenULB != 0 {
+		commitDistance = state.ConsensusParams.Block.LenULB
+	}
+
+	abciResponses, err := execBlockOnProxyApp(blockExec.logger, blockExec.proxyApp, block, blockExec.db, commitDistance)
+	endTime := time.Now().UnixNano()
+	blockExec.metrics.BlockProcessingTime.Observe(float64(endTime-startTime) / 1000000)
+	if err != nil {
+		return state, ErrProxyAppConn(err)
+	}
+
+	fail.Fail() // XXX
+
+	// Save the results before we commit.
+	saveABCIResponses(blockExec.db, block.Height, abciResponses)
+
+	fail.Fail() // XXX
+
+	// validate the validator updates and convert to tendermint types
+	abciValUpdates := abciResponses.EndBlock.ValidatorUpdates
+	err = validateValidatorUpdates(abciValUpdates, state.ConsensusParams.Validator)
+	if err != nil {
+		return state, fmt.Errorf("Error in validator updates: %v", err)
+	}
+	validatorUpdates, err := types.PB2TM.ValidatorUpdates(abciValUpdates)
+	if err != nil {
+		return state, err
+	}
+	if len(validatorUpdates) > 0 {
+		blockExec.logger.Info("Updates to validators", "updates", types.ValidatorListString(validatorUpdates))
+	}
+
+	// Update the state with the block and responses.
+	state, err = updateFridayState(state, blockID, &block.Header, abciResponses, validatorUpdates)
 	if err != nil {
 		return state, fmt.Errorf("Commit failed for application: %v", err)
 	}
@@ -451,6 +527,11 @@ func updateState(
 	abciResponses *ABCIResponses,
 	validatorUpdates []*types.Validator,
 ) (State, error) {
+	// It means when running friday consensus
+	// TODO: refactor to package seperation
+	if state.ConsensusParams.Block.LenULB != 0 {
+		return updateFridayState(state, blockID, header, abciResponses, validatorUpdates)
+	}
 
 	// Copy the valset so we can apply changes from EndBlock
 	// and update s.LastValidators and s.Validators.
@@ -465,6 +546,71 @@ func updateState(
 		}
 		// Change results from this height but only applies to the next next height.
 		lastHeightValsChanged = header.Height + 1 + 1
+	}
+
+	// Update validator proposer priority and set state variables.
+	nValSet.IncrementProposerPriority(1)
+
+	// Update the params with the latest abciResponses.
+	nextParams := state.ConsensusParams
+	lastHeightParamsChanged := state.LastHeightConsensusParamsChanged
+	if abciResponses.EndBlock.ConsensusParamUpdates != nil {
+		// NOTE: must not mutate s.ConsensusParams
+		nextParams = state.ConsensusParams.Update(abciResponses.EndBlock.ConsensusParamUpdates)
+		err := nextParams.Validate()
+		if err != nil {
+			return state, fmt.Errorf("Error updating consensus params: %v", err)
+		}
+		// Change results from this height but only applies to the next height.
+		lastHeightParamsChanged = header.Height + 1
+	}
+
+	// TODO: allow app to upgrade version
+	nextVersion := state.Version
+
+	// NOTE: the AppHash has not been populated.
+	// It will be filled on state.Save.
+	return State{
+		Version:                          nextVersion,
+		ChainID:                          state.ChainID,
+		LastBlockHeight:                  header.Height,
+		LastBlockTotalTx:                 state.LastBlockTotalTx + header.NumTxs,
+		LastBlockID:                      blockID,
+		LastBlockTime:                    header.Time,
+		NextValidators:                   nValSet,
+		Validators:                       state.NextValidators.Copy(),
+		LastValidators:                   state.Validators.Copy(),
+		LastHeightValidatorsChanged:      lastHeightValsChanged,
+		ConsensusParams:                  nextParams,
+		LastHeightConsensusParamsChanged: lastHeightParamsChanged,
+		LastResultsHash:                  abciResponses.ResultsHash(),
+		AppHash:                          nil,
+	}, nil
+}
+
+// updateFridayState returns a new State updated according to the header and responses.
+// NOTE: change NextValidators delay distance to after ULB distance
+func updateFridayState(
+	state State,
+	blockID types.BlockID,
+	header *types.Header,
+	abciResponses *ABCIResponses,
+	validatorUpdates []*types.Validator,
+) (State, error) {
+
+	// Copy the valset so we can apply changes from EndBlock
+	// and update s.LastValidators and s.Validators.
+	nValSet := state.NextValidators.Copy()
+
+	// Update the validator set with the latest abciResponses.
+	lastHeightValsChanged := state.LastHeightValidatorsChanged
+	if len(validatorUpdates) > 0 {
+		err := nValSet.UpdateWithChangeSet(validatorUpdates)
+		if err != nil {
+			return state, fmt.Errorf("Error changing validator set: %v", err)
+		}
+		// Change results from this height but only applies to the next next height.
+		lastHeightValsChanged = header.Height + 1 + state.ConsensusParams.Block.LenULB
 	}
 
 	// Update validator proposer priority and set state variables.
