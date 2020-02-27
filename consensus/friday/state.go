@@ -1139,8 +1139,14 @@ func (cs *ConsensusState) isProposalComplete(height int64) bool {
 func (cs *ConsensusState) createProposalBlock(height int64) (block *types.Block, blockParts *types.PartSet) {
 	var ulbCommit *types.Commit
 	var ulbValidators *types.ValidatorSet
+	var validators *types.ValidatorSet
 	var appHash []byte
 	var resultsHash []byte
+
+	var valsErr error
+	if validators, valsErr = sm.LoadValidators(cs.blockExec.DB(), height); valsErr != nil {
+		panic(fmt.Sprintf("Cannot load Validators. height=%v, LastBlockHeight=%v, error=%v", height, cs.state.LastBlockHeight, valsErr.Error()))
+	}
 
 	if height <= cs.state.ConsensusParams.Block.LenULB {
 		// We're creating a proposal for the previous ULB block.
@@ -1194,7 +1200,13 @@ func (cs *ConsensusState) createProposalBlock(height int64) (block *types.Block,
 	}
 
 	proposerAddr := cs.privValidator.GetPubKey().Address()
-	return cs.blockExec.CreateProposalBlockFromArgs(height, prevBlockID, prevTotalTxs, cs.state, ulbCommit, ulbValidators, appHash, resultsHash, proposerAddr)
+	return cs.blockExec.CreateProposalBlockFromArgs(
+		height,
+		prevBlockID, prevTotalTxs,
+		cs.state,
+		ulbCommit, ulbValidators,
+		validators.Hash(), appHash, resultsHash,
+		proposerAddr)
 }
 
 func (cs *ConsensusState) validateProgressingPreviousBlock(block *types.Block) error {

@@ -170,6 +170,7 @@ func (state State) MakeBlockFromArgs(
 	ulbCommit *types.Commit, ulbValidators *types.ValidatorSet, //Pair matched Commit and ValidatorSet
 	evidence []types.Evidence,
 	proposerAddress []byte,
+	validatorsHash []byte,
 	appHash []byte,
 	resultsHash []byte,
 ) (*types.Block, *types.PartSet) {
@@ -189,7 +190,7 @@ func (state State) MakeBlockFromArgs(
 	block.Header.Populate(
 		state.Version.Consensus, state.ChainID,
 		timestamp, prevBlockID, prevBlockTotalTxs+block.NumTxs,
-		state.Validators.Hash(), state.NextValidators.Hash(),
+		validatorsHash, state.NextValidators.Hash(),
 		state.ConsensusParams.Hash(), appHash, resultsHash,
 		proposerAddress,
 	)

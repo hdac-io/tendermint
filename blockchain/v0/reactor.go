@@ -333,8 +333,22 @@ FOR_LOOP:
 			// NOTE: we can probably make this more efficient, but note that calling
 			// first.Hash() doesn't verify the tx contents, so MakePartSet() is
 			// currently necessary.
-			err := state.Validators.VerifyCommit(
-				chainID, firstID, first.Height, second.LastCommit)
+			var err error
+			switch bcR.poolVersion {
+			case "tendermint":
+				err = state.Validators.VerifyCommit(
+					chainID, firstID, first.Height, second.LastCommit)
+			case "friday":
+				if validators, valErr := sm.LoadValidators(bcR.blockExec.DB(), first.Height); valErr == nil {
+					err = validators.VerifyCommit(
+						chainID, firstID, first.Height, second.LastCommit)
+				} else {
+					err = valErr
+				}
+			default:
+				panic(fmt.Sprintf("unknown pool version %s", bcR.poolVersion))
+			}
+
 			if err != nil {
 				bcR.Logger.Error("Error in validation", "err", err)
 				peerID := bcR.pool.RedoRequest(first.Height)

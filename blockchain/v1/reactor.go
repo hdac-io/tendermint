@@ -423,7 +423,20 @@ func (bcR *BlockchainReactor) processBlock() error {
 	// NOTE: we can probably make this more efficient, but note that calling
 	// first.Hash() doesn't verify the tx contents, so MakePartSet() is
 	// currently necessary.
-	err = bcR.state.Validators.VerifyCommit(chainID, firstID, first.Height, second.LastCommit)
+	switch bcR.poolVersion {
+	case "tendermint":
+		err = bcR.state.Validators.VerifyCommit(
+			chainID, firstID, first.Height, second.LastCommit)
+	case "friday":
+		if validators, valErr := sm.LoadValidators(bcR.blockExec.DB(), first.Height); valErr == nil {
+			err = validators.VerifyCommit(
+				chainID, firstID, first.Height, second.LastCommit)
+		} else {
+			err = valErr
+		}
+	default:
+		panic(fmt.Sprintf("unknown pool version %s", bcR.poolVersion))
+	}
 	if err != nil {
 		bcR.Logger.Error("error during commit verification", "err", err,
 			"first", first.Height, "second", second.Height)
