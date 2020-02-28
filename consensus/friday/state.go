@@ -1078,7 +1078,7 @@ func (cs *ConsensusState) defaultDecideProposal(height int64, round int) {
 	}
 
 	// Decide on block
-	if heightRound.ValidBlock != nil {
+	if heightRound.ValidBlock != nil && cs.validatePreviousBlock(heightRound.ValidBlock) == nil {
 		// If there is valid block, choose that.
 		block, blockParts = heightRound.ValidBlock, heightRound.ValidBlockParts
 	} else {
@@ -1218,21 +1218,35 @@ func (cs *ConsensusState) createProposalBlock(height int64) (block *types.Block,
 		proposerAddr)
 }
 
-func (cs *ConsensusState) validateProgressingPreviousBlock(block *types.Block) error {
+func (cs *ConsensusState) validatePreviousBlock(block *types.Block) error {
 	previousHeight := block.Height - 1
 	if previousHeight > cs.state.LastBlockHeight {
+		var prevID types.BlockID
+
 		prevRs := cs.GetRoundState(previousHeight)
 		if prevRs == nil {
 			//one more check if after commited
 			if previousHeight <= cs.state.LastBlockHeight {
-				return nil
+				prevMeta := cs.blockStore.LoadBlockMeta(previousHeight)
+				if prevMeta == nil {
+					panic(fmt.Sprintf("cannot found commit block meta height=%v", previousHeight))
+				}
+				prevID = prevMeta.BlockID
 			} else {
 				return fmt.Errorf("cannot found RoundState at previous height")
 			}
+		} else {
+			prevID = types.BlockID{Hash: prevRs.ProposalBlock.Hash(), PartsHeader: prevRs.ProposalBlockParts.Header()}
 		}
-		prevID := types.BlockID{Hash: prevRs.ProposalBlock.Hash(), PartsHeader: prevRs.ProposalBlockParts.Header()}
+
 		if !block.LastBlockID.Equals(prevID) {
 			return &sm.ErrLastBlockIDMismatch{block.LastBlockID, prevID}
+		}
+	} else if previousHeight > 0 {
+		if prevMeta := cs.blockStore.LoadBlockMeta(previousHeight); prevMeta == nil {
+			panic(fmt.Sprintf("cannot found commit block meta height=%v", previousHeight))
+		} else if !block.LastBlockID.Equals(prevMeta.BlockID) {
+			return &sm.ErrLastBlockIDMismatch{block.LastBlockID, prevMeta.BlockID}
 		}
 	}
 
@@ -1279,9 +1293,20 @@ func (cs *ConsensusState) defaultDoPrevote(height int64, round int) {
 
 	// If a block is locked, prevote that.
 	if heightRound.LockedBlock != nil {
-		logger.Info("enterPrevote: Block was locked")
-		cs.signAddVote(height, types.PrevoteType, heightRound.LockedBlock.Hash(), heightRound.LockedBlockParts.Header())
-		return
+		// Validate previous block if when progressing
+		err := cs.validatePreviousBlock(heightRound.LockedBlock)
+		if err != nil {
+			// ProposalBlock is invalid, prevote nil.
+			logger.Error("enterPrevote: locked block linked previous block is invalid. unlocking", "err", err)
+			heightRound.LockedRound = -1
+			heightRound.LockedBlock = nil
+			heightRound.LockedBlockParts = nil
+			cs.eventBus.PublishEventUnlock(heightRound.RoundStateEvent())
+		} else {
+			logger.Info("enterPrevote: Block was locked")
+			cs.signAddVote(height, types.PrevoteType, heightRound.LockedBlock.Hash(), heightRound.LockedBlockParts.Header())
+			return
+		}
 	}
 
 	// If ProposalBlock is nil, prevote nil.
@@ -1307,7 +1332,7 @@ func (cs *ConsensusState) defaultDoPrevote(height int64, round int) {
 	}
 
 	// Validate previous block if when progressing
-	err = cs.validateProgressingPreviousBlock(heightRound.ProposalBlock)
+	err = cs.validatePreviousBlock(heightRound.ProposalBlock)
 	if err != nil {
 		// ProposalBlock is invalid, prevote nil.
 		logger.Error("enterPrevote: previous block is invalid", "err", err)
@@ -1422,6 +1447,16 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 
 	// If we're already locked on that block, precommit it, and update the LockedRound
 	if heightRound.LockedBlock.HashesTo(blockID.Hash) {
+		if err := cs.validatePreviousBlock(heightRound.LockedBlock); err != nil {
+			logger.Error("enterPrecommit: lockedBlock linked previous block is invalid. Unlocking", "err", err)
+			heightRound.LockedRound = -1
+			heightRound.LockedBlock = nil
+			heightRound.LockedBlockParts = nil
+			cs.eventBus.PublishEventUnlock(heightRound.RoundStateEvent())
+			cs.signAddVote(height, types.PrecommitType, nil, types.PartSetHeader{})
+			return
+		}
+
 		logger.Info("enterPrecommit: +2/3 prevoted locked block. Relocking")
 		heightRound.LockedRound = round
 		cs.eventBus.PublishEventRelock(heightRound.RoundStateEvent())
@@ -1431,7 +1466,6 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 
 	// If +2/3 prevoted for proposal block, stage and precommit it
 	if heightRound.ProposalBlock.HashesTo(blockID.Hash) {
-		logger.Info("enterPrecommit: +2/3 prevoted proposal block. Locking", "hash", blockID.Hash)
 		// Validate the block.
 		if err := cs.blockExec.ValidateBlock(cs.state, heightRound.ProposalBlock); err != nil {
 			switch err.(type) {
@@ -1445,8 +1479,8 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 			panic(fmt.Sprintf("enterPrecommit: +2/3 prevoted for an invalid block: %v", err))
 		}
 		// Validate previous block if when progressing
-		if err := cs.validateProgressingPreviousBlock(heightRound.ProposalBlock); err != nil {
-			// ProposalBlock is invalid, prevote nil.
+		if err := cs.validatePreviousBlock(heightRound.ProposalBlock); err != nil {
+			// ProposalBlock is invalid, precommit nil.
 			logger.Error("enterPrecommit: previous block is invalid", "err", err)
 			heightRound.ValidRound = -1
 			heightRound.ValidBlock = nil
@@ -1455,6 +1489,7 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 			return
 		}
 
+		logger.Info("enterPrecommit: +2/3 prevoted proposal block. Locking", "hash", blockID.Hash)
 		heightRound.LockedRound = round
 		heightRound.LockedBlock = heightRound.ProposalBlock
 		heightRound.LockedBlockParts = heightRound.ProposalBlockParts
@@ -1871,7 +1906,7 @@ func (cs *ConsensusState) addProposalBlockPart(msg *BlockPartMessage, peerID p2p
 		prevotes := heightRound.Votes.Prevotes(heightRound.Round)
 		blockID, hasTwoThirds := prevotes.TwoThirdsMajority()
 		if hasTwoThirds && !blockID.IsZero() && (heightRound.ValidRound < heightRound.Round) {
-			if heightRound.ProposalBlock.HashesTo(blockID.Hash) {
+			if heightRound.ProposalBlock.HashesTo(blockID.Hash) && cs.validatePreviousBlock(heightRound.ProposalBlock) == nil {
 				cs.Logger.Info("Updating valid block to new proposal block",
 					"valid-round", heightRound.Round, "valid-block-hash", heightRound.ProposalBlock.Hash())
 				heightRound.ValidRound = heightRound.Round
