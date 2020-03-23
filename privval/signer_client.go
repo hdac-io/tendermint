@@ -44,6 +44,16 @@ func (sc *SignerClient) WaitForConnection(maxWait time.Duration) error {
 	return sc.endpoint.WaitForConnection(maxWait)
 }
 
+// SetImmutableHeight remove signature lower than target height(usage: last commited height)
+// Implements ParallelProgressablePV
+func (sc *SignerClient) SetImmutableHeight(height int64) error {
+	_, err := sc.endpoint.SendRequest(&SetImmutableHeightRequest{height})
+	if err != nil {
+		sc.endpoint.Logger.Error("SignerClient::SetImmutableHeight", "err", err)
+	}
+	return err
+}
+
 //--------------------------------------------------------
 // Implement PrivValidator
 
@@ -130,8 +140,7 @@ func (sc *SignerClient) SignProposal(chainID string, proposal *types.Proposal) e
 	return nil
 }
 
-// GetParallelProgressablePV implements PrivValidator. SignerClient cannot support.
-// TODO: support remote signer for friday
+// GetParallelProgressablePV implements PrivValidator.
 func (sc *SignerClient) GetParallelProgressablePV() types.ParallelProgressablePV {
-	return nil
+	return sc
 }

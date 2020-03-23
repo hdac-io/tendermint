@@ -1,9 +1,9 @@
 package privval
 
 import (
-	amino "github.com/tendermint/go-amino"
 	"github.com/hdac-io/tendermint/crypto"
 	"github.com/hdac-io/tendermint/types"
+	amino "github.com/tendermint/go-amino"
 )
 
 // SignerMessage is sent between Signer Clients and Servers.
@@ -17,6 +17,8 @@ func RegisterRemoteSignerMsg(cdc *amino.Codec) {
 	cdc.RegisterConcrete(&SignedVoteResponse{}, "tendermint/remotesigner/SignedVoteResponse", nil)
 	cdc.RegisterConcrete(&SignProposalRequest{}, "tendermint/remotesigner/SignProposalRequest", nil)
 	cdc.RegisterConcrete(&SignedProposalResponse{}, "tendermint/remotesigner/SignedProposalResponse", nil)
+	cdc.RegisterConcrete(&SetImmutableHeightRequest{}, "tendermint/remotesigner/SetImmutableHeightRequest", nil)
+	cdc.RegisterConcrete(&SetImmutableHeightResponse{}, "tendermint/remotesigner/SetImmutableHeightResponse", nil)
 
 	cdc.RegisterConcrete(&PingRequest{}, "tendermint/remotesigner/PingRequest", nil)
 	cdc.RegisterConcrete(&PingResponse{}, "tendermint/remotesigner/PingResponse", nil)
@@ -31,6 +33,16 @@ type PubKeyRequest struct{}
 type PubKeyResponse struct {
 	PubKey crypto.PubKey
 	Error  *RemoteSignerError
+}
+
+// SetImmutableHeightRequest is a request to set a immutable height
+type SetImmutableHeightRequest struct {
+	ImmutableHeight int64
+}
+
+// SetImmutableHeightResponse is a response an error
+type SetImmutableHeightResponse struct {
+	Error *RemoteSignerError
 }
 
 // SignVoteRequest is a request to sign a vote
