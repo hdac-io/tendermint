@@ -1506,6 +1506,7 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 	heightRound.LockedBlock = nil
 	heightRound.LockedBlockParts = nil
 	if !heightRound.ProposalBlockParts.HasHeader(blockID.PartsHeader) {
+		cs.blockExec.UnreserveBlock(cs.state, heightRound.ProposalBlock)
 		heightRound.ProposalBlock = nil
 		heightRound.ProposalBlockParts = types.NewPartSetFromHeader(blockID.PartsHeader)
 	}
@@ -1591,6 +1592,7 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 			logger.Info("Commit is for a block we don't know about. Set ProposalBlock=nil", "proposal", heightRound.ProposalBlock.Hash(), "commit", blockID.Hash)
 			// We're getting the wrong block.
 			// Set up ProposalBlockParts and keep waiting.
+			cs.blockExec.UnreserveBlock(cs.state, heightRound.ProposalBlock)
 			heightRound.ProposalBlock = nil
 			heightRound.ProposalBlockParts = types.NewPartSetFromHeader(blockID.PartsHeader)
 			cs.eventBus.PublishEventValidBlock(heightRound.RoundStateEvent())
@@ -2027,6 +2029,7 @@ func (cs *ConsensusState) addVote(vote *types.Vote, peerID p2p.ID) (added bool, 
 						"Valid block we don't know about. Set ProposalBlock=nil",
 						"proposal", heightRound.ProposalBlock.Hash(), "blockId", blockID.Hash)
 					// We're getting the wrong block.
+					cs.blockExec.UnreserveBlock(cs.state, heightRound.ProposalBlock)
 					heightRound.ProposalBlock = nil
 				}
 				if !heightRound.ProposalBlockParts.HasHeader(blockID.PartsHeader) {
