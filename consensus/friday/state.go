@@ -512,7 +512,7 @@ func (cs *ConsensusState) updateNewHeight(height int64) bool {
 
 		validators, _ = sm.LoadValidators(cs.blockExec.DB(), height)
 	} else {
-		validators = cs.state.Validators.Copy()
+		validators, _ = sm.LoadValidators(cs.blockExec.DB(), height)
 	}
 
 	startTime := tmtime.Now()
