@@ -2,6 +2,7 @@ package state
 
 import (
 	"fmt"
+	"sync"
 
 	abci "github.com/hdac-io/tendermint/abci/types"
 	cmn "github.com/hdac-io/tendermint/libs/common"
@@ -15,6 +16,7 @@ const (
 	// https://github.com/tendermint/tendermint/pull/3438
 	// 100000 results in ~ 100ms to get 100 validators (see BenchmarkLoadValidators)
 	valSetCheckpointInterval = 100000
+	valSetCacheSize          = 3
 )
 
 //------------------------------------------------------------------------
@@ -220,9 +222,15 @@ func (valInfo *ValidatorsInfo) Bytes() []byte {
 	return cdc.MustMarshalBinaryBare(valInfo)
 }
 
+var cachedValidators sync.Map
+
 // LoadValidators loads the ValidatorSet for a given height.
 // Returns ErrNoValSetForHeight if the validator set can't be found for this height.
 func LoadValidators(db dbm.DB, height int64) (*types.ValidatorSet, error) {
+	if cached, exist := cachedValidators.Load(height); exist {
+		return cached.(*ValidatorsInfo).ValidatorSet, nil
+	}
+
 	valInfo := loadValidatorsInfo(db, height)
 	if valInfo == nil {
 		return nil, ErrNoValSetForHeight{height}
@@ -250,6 +258,9 @@ func LoadValidators(db dbm.DB, height int64) (*types.ValidatorSet, error) {
 		valInfo2.ValidatorSet.IncrementProposerPriority(int(height - lastStoredHeight)) // mutate
 		valInfo = valInfo2
 	}
+
+	cachedValidators.Store(height, valInfo)
+	cachedValidators.Delete(height - valSetCacheSize)
 
 	return valInfo.ValidatorSet, nil
 }
