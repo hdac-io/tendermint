@@ -1099,6 +1099,11 @@ func (cs *ConsensusState) defaultDecideProposal(height int64, round int) {
 
 		// send proposal and block parts on internal msg queue
 		cs.sendInternalMessage(msgInfo{&ProposalMessage{proposal}, ""})
+		// NOTE: message handlers are executed in parallel(goroutine).
+		// So sometimes the block part message is processed before the proposal message.
+		// There is a slight delay.
+		time.Sleep(time.Millisecond * 10)
+
 		for i := 0; i < blockParts.Total(); i++ {
 			part := blockParts.GetPart(i)
 			cs.sendInternalMessage(msgInfo{&BlockPartMessage{heightRound.Height, heightRound.Round, part}, ""})
