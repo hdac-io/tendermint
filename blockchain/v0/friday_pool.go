@@ -1,6 +1,8 @@
 package v0
 
 import (
+	"time"
+
 	cmn "github.com/hdac-io/tendermint/libs/common"
 	"github.com/hdac-io/tendermint/p2p"
 	"github.com/hdac-io/tendermint/types"
@@ -31,6 +33,30 @@ func NewFridayBlockPool(start int64, requestsCh chan<- BlockRequest, errorsCh ch
 	}
 	bp.BaseService = *cmn.NewBaseService(nil, "BlockPool", bp)
 	return bp
+}
+
+// IsCaughtUp returns true if this node is caught up, false - otherwise.
+// TODO: relax conditions, prevent abuse.
+// NOTE: fix check pool height condition for ulb
+func (pool *FridayBlockPool) IsCaughtUp() bool {
+	pool.mtx.Lock()
+	defer pool.mtx.Unlock()
+
+	// Need at least 1 peer to be considered caught up.
+	if len(pool.peers) == 0 {
+		pool.Logger.Debug("Blockpool has no peers")
+		return false
+	}
+
+	// Some conditions to determine if we're caught up.
+	// Ensures we've either received a block or waited some amount of time,
+	// and that we're synced to the highest known height.
+	// Note we use maxPeerHeight - ulb because to sync block H requires block H+ulb
+	// to verify the LastCommit.
+	receivedBlockOrTimedOut := pool.height > 0 || time.Since(pool.startTime) > 5*time.Second
+	ourChainIsLongestAmongPeers := pool.maxPeerHeight == 0 || pool.height >= (pool.maxPeerHeight-pool.ulbHandler())
+	isCaughtUp := receivedBlockOrTimedOut && ourChainIsLongestAmongPeers
+	return isCaughtUp
 }
 
 // PeekTwoBlocks returns blocks at pool.height and pool.height+ULBLength.
