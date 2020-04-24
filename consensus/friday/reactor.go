@@ -930,9 +930,10 @@ type PeerState struct {
 	peer   p2p.Peer
 	logger log.Logger
 
-	mtx   sync.Mutex      // NOTE: Modify below using setters, never directly.
-	PRS   sync.Map        `json:"round_state"` // Exposed.
-	Stats *peerStateStats `json:"stats"`       // Exposed.
+	highestHeight int64
+	mtx           sync.Mutex      // NOTE: Modify below using setters, never directly.
+	PRS           sync.Map        `json:"round_state"` // Exposed.
+	Stats         *peerStateStats `json:"stats"`       // Exposed.
 }
 
 // peerStateStats holds internal statistics for a peer.
@@ -949,10 +950,11 @@ func (pss peerStateStats) String() string {
 // NewPeerState returns a new PeerState for the given Peer
 func NewPeerState(peer p2p.Peer) *PeerState {
 	return &PeerState{
-		peer:   peer,
-		logger: log.NewNopLogger(),
-		PRS:    sync.Map{},
-		Stats:  &peerStateStats{},
+		peer:          peer,
+		logger:        log.NewNopLogger(),
+		highestHeight: 0,
+		PRS:           sync.Map{},
+		Stats:         &peerStateStats{},
 	}
 }
 
@@ -989,6 +991,14 @@ func (ps *PeerState) ToJSON() ([]byte, error) {
 	defer ps.mtx.Unlock()
 
 	return cdc.MarshalJSON(ps)
+}
+
+// GetHeight returns an atomic snapshot of the PeerRoundState's height
+// used by the mempool to ensure peers are caught up before broadcasting new txs
+func (ps *PeerState) GetHeight() int64 {
+	ps.mtx.Lock()
+	defer ps.mtx.Unlock()
+	return ps.highestHeight
 }
 
 // SetHasProposal sets the given proposal as known for the peer.
@@ -1272,6 +1282,9 @@ func (ps *PeerState) ApplyNewRoundStepMessage(msg *NewRoundStepMessage) {
 		}
 
 		// Just remember these values.
+		if ps.highestHeight < msg.Height {
+			ps.highestHeight = msg.Height
+		}
 		psRound := existState.Round
 		psCatchupCommitRound := existState.CatchupCommitRound
 		psCatchupCommit := existState.CatchupCommit
