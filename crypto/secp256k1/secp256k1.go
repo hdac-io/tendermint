@@ -8,7 +8,7 @@ import (
 	"io"
 	"math/big"
 
-	"golang.org/x/crypto/ripemd160"
+	"golang.org/x/crypto/blake2b"
 
 	secp256k1 "github.com/btcsuite/btcd/btcec"
 
@@ -139,15 +139,13 @@ const PubKeySecp256k1Size = 33
 // This prefix is followed with the x-coordinate.
 type PubKeySecp256k1 [PubKeySecp256k1Size]byte
 
-// Address returns a Bitcoin style addresses: RIPEMD160(SHA256(pubkey))
+// Address returns a friday style addresses: BLAKE2B-256(pubkey)
 func (pubKey PubKeySecp256k1) Address() crypto.Address {
-	hasherSHA256 := sha256.New()
-	hasherSHA256.Write(pubKey[:]) // does not error
-	sha := hasherSHA256.Sum(nil)
-
-	hasherRIPEMD160 := ripemd160.New()
-	hasherRIPEMD160.Write(sha) // does not error
-	return crypto.Address(hasherRIPEMD160.Sum(nil))
+	if blake2b256, err := blake2b.New256(pubKey[:]); err != nil {
+		panic(err)
+	} else {
+		return crypto.Address(blake2b256.Sum(nil))
+	}
 }
 
 // Bytes returns the pubkey marshalled with amino encoding.
