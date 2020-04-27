@@ -1,0 +1,5 @@
+---
+
+- name: restart tendermint
+  service: name=tendermint state=restarted
+

@@ -4,7 +4,7 @@ resource "digitalocean_tag" "cluster" {
 
 resource "digitalocean_ssh_key" "cluster" {
   name       = "${var.name}"
-  public_key = "${file(var.ssh_key)}"
+  public_key = "${file(var.ssh_public_file)}"
 }
 
 resource "digitalocean_droplet" "cluster" {
@@ -21,7 +21,19 @@ resource "digitalocean_droplet" "cluster" {
   }
 
   connection {
-    timeout = "30s"
+    private_key = "${file(var.ssh_private_file)}"
+  }
+
+  provisioner "file" {
+    source = "files/terraform.sh"
+    destination = "/tmp/terraform.sh"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "chmod +x /tmp/terraform.sh",
+      "/tmp/terraform.sh ${var.name} ${count.index}",
+    ]
   }
 
 }

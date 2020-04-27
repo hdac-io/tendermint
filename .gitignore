@@ -45,3 +45,5 @@ terraform.tfstate.d
 .vscode
 
 profile\.out
+
+networks/remote_migration/ansible/.testnet

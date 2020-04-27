@@ -1,0 +1,11 @@
+init_config:
+
+instances:
+- name: ssh
+  search_string: ['ssh', 'sshd']
+  thresholds:
+    critical: [1, 5]
+- name: tendermint
+  search_string: ['tendermint']
+  thresholds:
+    critical: [1, 1]

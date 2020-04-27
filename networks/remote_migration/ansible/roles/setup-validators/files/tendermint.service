@@ -1,0 +1,17 @@
+[Unit]
+Description=tendermint
+Requires=network-online.target
+After=network-online.target
+
+[Service]
+Restart=on-failure
+User=tendermint
+Group=tendermint
+PermissionsStartOnly=true
+ExecStart=/usr/bin/tendermint node --proxy_app=kvstore --rpc.laddr=tcp://0.0.0.0:26657
+ExecReload=/bin/kill -HUP $MAINPID
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
+

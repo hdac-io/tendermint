@@ -1,0 +1,57 @@
+---
+- name: Get node ID
+  command: "cat /etc/nodeid"
+  changed_when: false
+  register: nodeid
+  
+- name: Create tendermint user
+  user: name=tendermint home=/home/tendermint shell=/bin/bash
+
+- name: Copy binary
+  copy:
+    src: "{{BINARY}}"
+    dest: /usr/bin
+    mode: 0755
+
+- name: Copy service file
+  copy: src=tendermint.service dest=/etc/systemd/system/tendermint.service mode=0755
+  notify: reload systemd
+
+- name: Get hosts IPv4
+  set_fact:
+    hostipv4list: "{{ hostvars[inventory_hostname]['groups']['key_' + ec2_key_name  | replace('-','_') ] }}"
+
+- name: Get self ip index
+  set_fact:
+    nodeindex: "{{ item.0 | int }}"
+  when: item.1 == ec2_ip_address
+  with_indexed_items: "{{ hostipv4list }}"
+  
+
+- name: Convert ipv4 to commandline args
+  vars:
+    hostargs: ""
+  set_fact:
+    hostargs: "{{ hostargs }} --hostname {{item}}" 
+  with_items: "{{ hostipv4list }}"
+  run_once: true
+  
+- name: Init testnet
+  command: "tendermint testnet --v {{ hostipv4list|length }} {{ hostargs }} --o ./.testnet/ --populate-persistent-peers"
+  connection: local
+  run_once: true
+  args:
+    creates: /.testnet/node0/config/genesis.json
+
+- name: Init node
+  command: "tendermint init"
+  become: yes
+  become_user: tendermint
+  args:
+    creates: /home/tendermint/.tendermint/config/genesis.json
+
+- name: Upload node setup
+  copy:
+    dest: "/home/tendermint/.tendermint/config/"
+    src: "./.testnet/node{{nodeindex}}/config/"
+
