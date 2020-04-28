@@ -24,7 +24,7 @@ func Sum(bz []byte) []byte {
 //-------------------------------------------------------------
 
 const (
-	TruncatedSize = 20
+	TruncatedSize = 32
 )
 
 type sha256trunc struct {
@@ -58,8 +58,9 @@ func NewTruncated() hash.Hash {
 	}
 }
 
-// SumTruncated returns the first 20 bytes of SHA256 of the bz.
+// SumTruncated returns the first 32 bytes of SHA256 of the bz.
+// NOTE: friday changes the length of all addresses to 32 bytes.
 func SumTruncated(bz []byte) []byte {
 	hash := sha256.Sum256(bz)
-	return hash[:TruncatedSize]
+	return hash[:]
 }
