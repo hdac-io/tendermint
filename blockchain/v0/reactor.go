@@ -59,11 +59,13 @@ type BlockchainReactor struct {
 
 	// immutable
 	initialState sm.State
+	latestState  sm.State
 
-	blockExec *sm.BlockExecutor
-	store     *store.BlockStore
-	pool      *BlockPool
-	fastSync  bool
+	blockExec   *sm.BlockExecutor
+	store       *store.BlockStore
+	pool        IBlockPool
+	poolVersion string
+	fastSync    bool
 
 	requestsCh <-chan BlockRequest
 	errorsCh   <-chan peerError
@@ -71,7 +73,7 @@ type BlockchainReactor struct {
 
 // NewBlockchainReactor returns new reactor instance.
 func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *store.BlockStore,
-	fastSync bool) *BlockchainReactor {
+	fastSync bool, poolVersion string) *BlockchainReactor {
 
 	if state.LastBlockHeight != store.Height() {
 		panic(fmt.Sprintf("state (%v) and store (%v) height mismatch", state.LastBlockHeight,
@@ -83,21 +85,42 @@ func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *st
 	const capacity = 1000                      // must be bigger than peers count
 	errorsCh := make(chan peerError, capacity) // so we don't block in #Receive#pool.AddBlock
 
-	pool := NewBlockPool(
-		store.Height()+1,
-		requestsCh,
-		errorsCh,
-	)
-
 	bcR := &BlockchainReactor{
 		initialState: state,
+		latestState:  state,
 		blockExec:    blockExec,
 		store:        store,
-		pool:         pool,
 		fastSync:     fastSync,
 		requestsCh:   requestsCh,
 		errorsCh:     errorsCh,
 	}
+
+	//lazy initialize pool field because of setup to friday ulb length handler
+	var pool IBlockPool
+	switch poolVersion {
+	case "tendermint":
+		pool = NewBlockPool(
+			store.Height()+1,
+			requestsCh,
+			errorsCh,
+		)
+
+	case "friday":
+		pool = NewFridayBlockPool(
+			store.Height()+1,
+			requestsCh,
+			errorsCh,
+			func() int64 {
+				return bcR.latestState.ConsensusParams.Block.LenULB
+			},
+		)
+
+	default:
+		panic(fmt.Sprintf("unknown pool version %s", poolVersion))
+	}
+	bcR.pool = pool
+	bcR.poolVersion = poolVersion
+
 	bcR.BaseReactor = *p2p.NewBaseReactor("BlockchainReactor", bcR)
 	return bcR
 }
@@ -105,7 +128,7 @@ func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *st
 // SetLogger implements cmn.Service by setting the logger on reactor and pool.
 func (bcR *BlockchainReactor) SetLogger(l log.Logger) {
 	bcR.BaseService.Logger = l
-	bcR.pool.Logger = l
+	bcR.pool.SetLogger(l)
 }
 
 // OnStart implements cmn.Service.
@@ -310,8 +333,22 @@ FOR_LOOP:
 			// NOTE: we can probably make this more efficient, but note that calling
 			// first.Hash() doesn't verify the tx contents, so MakePartSet() is
 			// currently necessary.
-			err := state.Validators.VerifyCommit(
-				chainID, firstID, first.Height, second.LastCommit)
+			var err error
+			switch bcR.poolVersion {
+			case "tendermint":
+				err = state.Validators.VerifyCommit(
+					chainID, firstID, first.Height, second.LastCommit)
+			case "friday":
+				if validators, valErr := sm.LoadValidators(bcR.blockExec.DB(), first.Height); valErr == nil {
+					err = validators.VerifyCommit(
+						chainID, firstID, first.Height, second.LastCommit)
+				} else {
+					err = valErr
+				}
+			default:
+				panic(fmt.Sprintf("unknown pool version %s", bcR.poolVersion))
+			}
+
 			if err != nil {
 				bcR.Logger.Error("Error in validation", "err", err)
 				peerID := bcR.pool.RedoRequest(first.Height)
@@ -333,7 +370,14 @@ FOR_LOOP:
 				bcR.pool.PopRequest()
 
 				// TODO: batch saves so we dont persist to disk every block
-				bcR.store.SaveBlock(first, firstParts, second.LastCommit)
+				switch bcR.poolVersion {
+				case "tendermint":
+					bcR.store.SaveBlock(first, firstParts, second.LastCommit, 1)
+				case "friday":
+					bcR.store.SaveBlock(first, firstParts, second.LastCommit, state.ConsensusParams.Block.LenULB)
+				default:
+					panic(fmt.Sprintf("unknown pool version %s", bcR.poolVersion))
+				}
 
 				// TODO: same thing for app - but we would need a way to
 				// get the hash without persisting the state
@@ -343,11 +387,12 @@ FOR_LOOP:
 					// TODO This is bad, are we zombie?
 					panic(fmt.Sprintf("Failed to process committed block (%d:%X): %v", first.Height, first.Hash(), err))
 				}
+				bcR.latestState = state
 				blocksSynced++
 
 				if blocksSynced%100 == 0 {
 					lastRate = 0.9*lastRate + 0.1*(100/time.Since(lastHundred).Seconds())
-					bcR.Logger.Info("Fast Sync Rate", "height", bcR.pool.height,
+					bcR.Logger.Info("Fast Sync Rate", "height", bcR.pool.GetHeight(),
 						"max_peer_height", bcR.pool.MaxPeerHeight(), "blocks/s", lastRate)
 					lastHundred = time.Now()
 				}
@@ -373,6 +418,7 @@ func (bcR *BlockchainReactor) BroadcastStatusRequest() error {
 // BlockchainMessage is a generic message for this reactor.
 type BlockchainMessage interface {
 	ValidateBasic() error
+	ValidateFridayBasic() error
 }
 
 // RegisterBlockchainMessages registers the fast sync messages for amino encoding.
@@ -407,6 +453,11 @@ func (m *bcBlockRequestMessage) ValidateBasic() error {
 	return nil
 }
 
+// ValidateBasic performs basic validation.
+func (m *bcBlockRequestMessage) ValidateFridayBasic() error {
+	return m.ValidateBasic()
+}
+
 func (m *bcBlockRequestMessage) String() string {
 	return fmt.Sprintf("[bcBlockRequestMessage %v]", m.Height)
 }
@@ -423,6 +474,11 @@ func (m *bcNoBlockResponseMessage) ValidateBasic() error {
 	return nil
 }
 
+// ValidateFridayBasic performs basic validation.
+func (m *bcNoBlockResponseMessage) ValidateFridayBasic() error {
+	return m.ValidateBasic()
+}
+
 func (m *bcNoBlockResponseMessage) String() string {
 	return fmt.Sprintf("[bcNoBlockResponseMessage %d]", m.Height)
 }
@@ -436,6 +492,11 @@ type bcBlockResponseMessage struct {
 // ValidateBasic performs basic validation.
 func (m *bcBlockResponseMessage) ValidateBasic() error {
 	return m.Block.ValidateBasic()
+}
+
+// ValidateFridayBasic performs basic validation(specialized for friday).
+func (m *bcBlockResponseMessage) ValidateFridayBasic() error {
+	return m.Block.ValidateFridayBasic()
 }
 
 func (m *bcBlockResponseMessage) String() string {
@@ -456,6 +517,11 @@ func (m *bcStatusRequestMessage) ValidateBasic() error {
 	return nil
 }
 
+// ValidateFridayBasic performs basic validation.
+func (m *bcStatusRequestMessage) ValidateFridayBasic() error {
+	return m.ValidateBasic()
+}
+
 func (m *bcStatusRequestMessage) String() string {
 	return fmt.Sprintf("[bcStatusRequestMessage %v]", m.Height)
 }
@@ -472,6 +538,11 @@ func (m *bcStatusResponseMessage) ValidateBasic() error {
 		return errors.New("Negative Height")
 	}
 	return nil
+}
+
+// ValidateFridayBasic performs basic validation.
+func (m *bcStatusResponseMessage) ValidateFridayBasic() error {
+	return m.ValidateBasic()
 }
 
 func (m *bcStatusResponseMessage) String() string {

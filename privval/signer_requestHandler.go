@@ -36,6 +36,18 @@ func DefaultValidationRequestHandler(privVal types.PrivValidator, req SignerMess
 	case *PingRequest:
 		err, res = nil, &PingResponse{}
 
+	case *SetImmutableHeightRequest:
+		if progressablePV := privVal.GetParallelProgressablePV(); progressablePV != nil {
+			err = progressablePV.SetImmutableHeight(r.ImmutableHeight)
+		} else {
+			err = fmt.Errorf("privVal %T type cannot support parallel progress", privVal)
+		}
+		if err != nil {
+			res = &SetImmutableHeightResponse{&RemoteSignerError{0, err.Error()}}
+		} else {
+			res = &SetImmutableHeightResponse{nil}
+		}
+
 	default:
 		err = fmt.Errorf("unknown msg: %v", r)
 	}

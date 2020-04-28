@@ -23,6 +23,7 @@ import (
 	cfg "github.com/hdac-io/tendermint/config"
 	"github.com/hdac-io/tendermint/consensus"
 	cs "github.com/hdac-io/tendermint/consensus"
+	fridaycs "github.com/hdac-io/tendermint/consensus/friday"
 	"github.com/hdac-io/tendermint/crypto"
 	"github.com/hdac-io/tendermint/evidence"
 	cmn "github.com/hdac-io/tendermint/libs/common"
@@ -109,8 +110,18 @@ func DefaultNewNode(config *cfg.Config, logger log.Logger) (*Node, error) {
 		oldPV.Upgrade(newPrivValKey, newPrivValState)
 	}
 
+	var privVal types.PrivValidator
+	switch config.Consensus.Version {
+	case "tendermint":
+		privVal = privval.LoadOrGenFilePV(newPrivValKey, newPrivValState)
+	case "friday":
+		privVal = privval.LoadOrGenFridayFilePV(newPrivValKey, newPrivValState)
+	default:
+		return nil, fmt.Errorf("invalid consensus version %s", config.Consensus.Version)
+	}
+
 	return NewNode(config,
-		privval.LoadOrGenFilePV(newPrivValKey, newPrivValState),
+		privVal,
 		nodeKey,
 		proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
 		DefaultGenesisDocProviderFunc(config),
@@ -191,8 +202,8 @@ type Node struct {
 	bcReactor        p2p.Reactor       // for fast-syncing
 	mempoolReactor   *mempl.Reactor    // for gossipping transactions
 	mempool          mempl.Mempool
-	consensusState   *cs.ConsensusState     // latest consensus state
-	consensusReactor *cs.ConsensusReactor   // for participating in the consensus
+	consensusState   cs.IConsensusState     // latest consensus state
+	consensusReactor cs.IConsensusReactor   // for participating in the consensus
 	pexReactor       *pex.PEXReactor        // for exchanging peer addresses
 	evidencePool     *evidence.EvidencePool // tracking evidence
 	proxyApp         proxy.AppConns         // connection to the application
@@ -266,14 +277,27 @@ func createAndStartIndexerService(config *cfg.Config, dbProvider DBProvider,
 	return indexerService, txIndexer, nil
 }
 
-func doHandshake(stateDB dbm.DB, state sm.State, blockStore sm.BlockStore,
+func doHandshake(config *cfg.Config, stateDB dbm.DB, state sm.State, blockStore sm.BlockStore,
 	genDoc *types.GenesisDoc, eventBus *types.EventBus, proxyApp proxy.AppConns, consensusLogger log.Logger) error {
 
-	handshaker := cs.NewHandshaker(stateDB, state, blockStore, genDoc)
-	handshaker.SetLogger(consensusLogger)
-	handshaker.SetEventBus(eventBus)
-	if err := handshaker.Handshake(proxyApp); err != nil {
-		return fmt.Errorf("error during handshake: %v", err)
+	// Handshaker it's only used here. don't abstract.
+	switch config.Consensus.Version {
+	case "tendermint":
+		handshaker := cs.NewHandshaker(stateDB, state, blockStore, genDoc)
+		handshaker.SetLogger(consensusLogger)
+		handshaker.SetEventBus(eventBus)
+		if err := handshaker.Handshake(proxyApp); err != nil {
+			return fmt.Errorf("error during handshake: %v", err)
+		}
+	case "friday":
+		handshaker := fridaycs.NewHandshaker(stateDB, state, blockStore, genDoc)
+		handshaker.SetLogger(consensusLogger)
+		handshaker.SetEventBus(eventBus)
+		if err := handshaker.Handshake(proxyApp); err != nil {
+			return fmt.Errorf("error during handshake: %v", err)
+		}
+	default:
+		return fmt.Errorf("invalid consensus version int doHandshake")
 	}
 	return nil
 }
@@ -356,9 +380,9 @@ func createBlockchainReactor(config *cfg.Config,
 
 	switch config.FastSync.Version {
 	case "v0":
-		bcReactor = bcv0.NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync)
+		bcReactor = bcv0.NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync, config.FastSync.PoolVersion)
 	case "v1":
-		bcReactor = bcv1.NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync)
+		bcReactor = bcv1.NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync, config.FastSync.PoolVersion)
 	default:
 		return nil, fmt.Errorf("unknown fastsync version %s", config.FastSync.Version)
 	}
@@ -377,26 +401,53 @@ func createConsensusReactor(config *cfg.Config,
 	csMetrics *cs.Metrics,
 	fastSync bool,
 	eventBus *types.EventBus,
-	consensusLogger log.Logger) (*consensus.ConsensusReactor, *consensus.ConsensusState) {
+	consensusLogger log.Logger) (consensus.IConsensusReactor, consensus.IConsensusState) {
 
-	consensusState := cs.NewConsensusState(
-		config.Consensus,
-		state.Copy(),
-		blockExec,
-		blockStore,
-		mempool,
-		evidencePool,
-		cs.StateMetrics(csMetrics),
-	)
+	var consensusState consensus.IConsensusState
+	var consensusReactor consensus.IConsensusReactor
+
+	switch config.Consensus.Version {
+	case "tendermint":
+		tmConsensusState := consensus.NewConsensusState(
+			config.Consensus,
+			state.Copy(),
+			blockExec,
+			blockStore,
+			mempool,
+			evidencePool,
+			consensus.StateMetrics(csMetrics),
+		)
+		tmConsensusReactor := consensus.NewConsensusReactor(tmConsensusState, fastSync, consensus.ReactorMetrics(csMetrics))
+		consensusState = tmConsensusState
+		consensusReactor = tmConsensusReactor
+
+	case "friday":
+		fridayConsensusState := fridaycs.NewConsensusState(
+			config.Consensus,
+			state.Copy(),
+			blockExec,
+			blockStore,
+			mempool,
+			evidencePool,
+			fridaycs.StateMetrics(csMetrics),
+		)
+
+		fridayConsensusReactor := fridaycs.NewConsensusReactor(fridayConsensusState, fastSync, fridaycs.ReactorMetrics(csMetrics))
+		consensusState = fridayConsensusState
+		consensusReactor = fridayConsensusReactor
+	default:
+		panic("invalid consensus version in createConsensusReactor")
+	}
+
 	consensusState.SetLogger(consensusLogger)
 	if privValidator != nil {
 		consensusState.SetPrivValidator(privValidator)
 	}
-	consensusReactor := cs.NewConsensusReactor(consensusState, fastSync, cs.ReactorMetrics(csMetrics))
 	consensusReactor.SetLogger(consensusLogger)
 	// services which will be publishing and/or subscribing for messages (events)
 	// consensusReactor will set it on consensusState and blockExecutor
 	consensusReactor.SetEventBus(eventBus)
+
 	return consensusReactor, consensusState
 }
 
@@ -462,7 +513,7 @@ func createSwitch(config *cfg.Config,
 	peerFilters []p2p.PeerFilterFunc,
 	mempoolReactor *mempl.Reactor,
 	bcReactor p2p.Reactor,
-	consensusReactor *consensus.ConsensusReactor,
+	consensusReactor cs.IConsensusReactor,
 	evidenceReactor *evidence.EvidenceReactor,
 	nodeInfo p2p.NodeInfo,
 	nodeKey *p2p.NodeKey,
@@ -579,7 +630,7 @@ func NewNode(config *cfg.Config,
 	// Create the handshaker, which calls RequestInfo, sets the AppVersion on the state,
 	// and replays any blocks as necessary to sync tendermint with the app.
 	consensusLogger := logger.With("module", "consensus")
-	if err := doHandshake(stateDB, state, blockStore, genDoc, eventBus, proxyApp, consensusLogger); err != nil {
+	if err := doHandshake(config, stateDB, state, blockStore, genDoc, eventBus, proxyApp, consensusLogger); err != nil {
 		return nil, err
 	}
 
@@ -623,6 +674,7 @@ func NewNode(config *cfg.Config,
 
 	// make block executor for consensus and blockchain reactors to execute blocks
 	blockExec := sm.NewBlockExecutor(
+		blockStore,
 		stateDB,
 		logger.With("module", "state"),
 		proxyApp.Consensus(),
@@ -973,12 +1025,12 @@ func (n *Node) BlockStore() *store.BlockStore {
 }
 
 // ConsensusState returns the Node's ConsensusState.
-func (n *Node) ConsensusState() *cs.ConsensusState {
+func (n *Node) ConsensusState() cs.IConsensusState {
 	return n.consensusState
 }
 
 // ConsensusReactor returns the Node's ConsensusReactor.
-func (n *Node) ConsensusReactor() *cs.ConsensusReactor {
+func (n *Node) ConsensusReactor() cs.IConsensusReactor {
 	return n.consensusReactor
 }
 

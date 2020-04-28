@@ -85,6 +85,20 @@ func DefaultConfig() *Config {
 	}
 }
 
+// DefaultFridayConfig returns a default configuration for a Tendermint node
+func DefaultFridayConfig() *Config {
+	return &Config{
+		BaseConfig:      DefaultBaseConfig(),
+		RPC:             DefaultRPCConfig(),
+		P2P:             DefaultP2PConfig(),
+		Mempool:         DefaultMempoolConfig(),
+		FastSync:        DefaultFridayFastSyncConfig(),
+		Consensus:       DefaultFridayConsensusConfig(),
+		TxIndex:         DefaultTxIndexConfig(),
+		Instrumentation: DefaultInstrumentationConfig(),
+	}
+}
+
 // TestConfig returns a configuration that can be used for testing
 func TestConfig() *Config {
 	return &Config{
@@ -94,6 +108,20 @@ func TestConfig() *Config {
 		Mempool:         TestMempoolConfig(),
 		FastSync:        TestFastSyncConfig(),
 		Consensus:       TestConsensusConfig(),
+		TxIndex:         TestTxIndexConfig(),
+		Instrumentation: TestInstrumentationConfig(),
+	}
+}
+
+// TestFridayConfig returns a configuration that can be used for testing
+func TestFridayConfig() *Config {
+	return &Config{
+		BaseConfig:      TestBaseConfig(),
+		RPC:             TestRPCConfig(),
+		P2P:             TestP2PConfig(),
+		Mempool:         TestMempoolConfig(),
+		FastSync:        TestFridayFastSyncConfig(),
+		Consensus:       TestFridayConsensusConfig(),
 		TxIndex:         TestTxIndexConfig(),
 		Instrumentation: TestInstrumentationConfig(),
 	}
@@ -688,6 +716,7 @@ func (cfg *MempoolConfig) ValidateBasic() error {
 	if cfg.MaxTxBytes < 0 {
 		return errors.New("max_tx_bytes can't be negative")
 	}
+
 	return nil
 }
 
@@ -696,13 +725,23 @@ func (cfg *MempoolConfig) ValidateBasic() error {
 
 // FastSyncConfig defines the configuration for the Tendermint fast sync service
 type FastSyncConfig struct {
-	Version string `mapstructure:"version"`
+	Version     string `mapstructure:"version"`
+	PoolVersion string `mapstructure:"pool_version"`
 }
 
 // DefaultFastSyncConfig returns a default configuration for the fast sync service
 func DefaultFastSyncConfig() *FastSyncConfig {
 	return &FastSyncConfig{
-		Version: "v0",
+		Version:     "v0",
+		PoolVersion: "tendermint",
+	}
+}
+
+// DefaultFridayFastSyncConfig returns a default specialized friday configuration for the fast sync service
+func DefaultFridayFastSyncConfig() *FastSyncConfig {
+	return &FastSyncConfig{
+		Version:     "v0",
+		PoolVersion: "friday",
 	}
 }
 
@@ -711,16 +750,29 @@ func TestFastSyncConfig() *FastSyncConfig {
 	return DefaultFastSyncConfig()
 }
 
+// TestFridayFastSyncConfig returns a default configuration for the fast sync.
+func TestFridayFastSyncConfig() *FastSyncConfig {
+	return DefaultFridayFastSyncConfig()
+}
+
 // ValidateBasic performs basic validation.
 func (cfg *FastSyncConfig) ValidateBasic() error {
+	var err error
 	switch cfg.Version {
 	case "v0":
-		return nil
 	case "v1":
-		return nil
 	default:
-		return fmt.Errorf("unknown fastsync version %s", cfg.Version)
+		err = fmt.Errorf("unknown fastsync version %s", cfg.Version)
 	}
+
+	switch cfg.PoolVersion {
+	case "tendermint":
+	case "friday":
+	default:
+		err = fmt.Errorf("unknown fastsync pool version %s", cfg.PoolVersion)
+	}
+
+	return err
 }
 
 //-----------------------------------------------------------------------------
@@ -729,6 +781,8 @@ func (cfg *FastSyncConfig) ValidateBasic() error {
 // ConsensusConfig defines the configuration for the Tendermint consensus service,
 // including timeouts and details about the WAL and the block structure.
 type ConsensusConfig struct {
+	Version string `mapstructure:"version"`
+
 	RootDir string `mapstructure:"home"`
 	WalPath string `mapstructure:"wal_file"`
 	walFile string // overrides WalPath if set
@@ -756,6 +810,7 @@ type ConsensusConfig struct {
 // DefaultConsensusConfig returns a default configuration for the consensus service
 func DefaultConsensusConfig() *ConsensusConfig {
 	return &ConsensusConfig{
+		Version:                     "tendermint",
 		WalPath:                     filepath.Join(defaultDataDir, "cs.wal", "wal"),
 		TimeoutPropose:              3000 * time.Millisecond,
 		TimeoutProposeDelta:         500 * time.Millisecond,
@@ -772,6 +827,13 @@ func DefaultConsensusConfig() *ConsensusConfig {
 	}
 }
 
+// DefaultFridayConsensusConfig returns a specialized friday default configuration for the consensus service
+func DefaultFridayConsensusConfig() *ConsensusConfig {
+	cfg := DefaultConsensusConfig()
+	cfg.Version = "friday"
+	return cfg
+}
+
 // TestConsensusConfig returns a configuration for testing the consensus service
 func TestConsensusConfig() *ConsensusConfig {
 	cfg := DefaultConsensusConfig()
@@ -785,6 +847,13 @@ func TestConsensusConfig() *ConsensusConfig {
 	cfg.SkipTimeoutCommit = true
 	cfg.PeerGossipSleepDuration = 5 * time.Millisecond
 	cfg.PeerQueryMaj23SleepDuration = 250 * time.Millisecond
+	return cfg
+}
+
+// TestFridayConsensusConfig returns a configuration for testing the friday consensus service
+func TestFridayConsensusConfig() *ConsensusConfig {
+	cfg := TestConsensusConfig()
+	cfg.Version = "friday"
 	return cfg
 }
 
@@ -835,6 +904,14 @@ func (cfg *ConsensusConfig) SetWalFile(walFile string) {
 // ValidateBasic performs basic validation (checking param bounds, etc.) and
 // returns an error if any check fails.
 func (cfg *ConsensusConfig) ValidateBasic() error {
+
+	switch cfg.Version {
+	case "tendermint":
+	case "friday":
+	default:
+		return errors.New("invalid consensus version")
+	}
+
 	if cfg.TimeoutPropose < 0 {
 		return errors.New("timeout_propose can't be negative")
 	}

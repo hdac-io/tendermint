@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	cmn "github.com/hdac-io/tendermint/libs/common"
 	"github.com/hdac-io/tendermint/libs/log"
 	"github.com/hdac-io/tendermint/p2p"
 	"github.com/hdac-io/tendermint/types"
+	"github.com/stretchr/testify/assert"
 )
 
 type lastBlockRequestT struct {
@@ -183,7 +183,7 @@ func sPeerRemoveEv(current, expected string, peerID p2p.ID, err error, peersRemo
 
 func newTestReactor(height int64) *testReactor {
 	testBcR := &testReactor{logger: log.TestingLogger(), stateTimerStarts: make(map[string]int)}
-	testBcR.fsm = NewFSM(height, testBcR)
+	testBcR.fsm = NewFSM(height, testBcR, "tendermint")
 	testBcR.fsm.SetLogger(testBcR.logger)
 	return testBcR
 }
@@ -194,7 +194,7 @@ func fixBlockResponseEvStep(step *fsmStepTestValues, testBcR *testReactor) {
 	// we cheat and look where it is expected from.
 	if step.event == blockResponseEv {
 		height := step.data.height
-		peerID, ok := testBcR.fsm.pool.blocks[height]
+		peerID, ok := testBcR.fsm.pool.(*BlockPool).blocks[height]
 		if ok {
 			step.data.peerID = peerID
 		}
@@ -226,7 +226,7 @@ func executeFSMTests(t *testing.T, tests []testFields, matchRespToReq bool) {
 
 				var heightBefore int64
 				if step.event == processedBlockEv && step.data.err == errBlockVerificationFailure {
-					heightBefore = testBcR.fsm.pool.Height
+					heightBefore = testBcR.fsm.pool.(*BlockPool).Height
 				}
 				oldNumStatusRequests := testBcR.numStatusRequests
 				oldNumBlockRequests := testBcR.numBlockRequests
@@ -254,10 +254,10 @@ func executeFSMTests(t *testing.T, tests []testFields, matchRespToReq bool) {
 					assert.Nil(t, err)
 				}
 				if step.event == processedBlockEv && step.data.err == errBlockVerificationFailure {
-					heightAfter := testBcR.fsm.pool.Height
+					heightAfter := testBcR.fsm.pool.(*BlockPool).Height
 					assert.Equal(t, heightBefore, heightAfter)
-					firstAfter, err1 := testBcR.fsm.pool.BlockAndPeerAtHeight(testBcR.fsm.pool.Height)
-					secondAfter, err2 := testBcR.fsm.pool.BlockAndPeerAtHeight(testBcR.fsm.pool.Height + 1)
+					firstAfter, err1 := testBcR.fsm.pool.BlockAndPeerAtHeight(testBcR.fsm.pool.(*BlockPool).Height)
+					secondAfter, err2 := testBcR.fsm.pool.BlockAndPeerAtHeight(testBcR.fsm.pool.(*BlockPool).Height + 1)
 					assert.NotNil(t, err1)
 					assert.NotNil(t, err2)
 					assert.Nil(t, firstAfter)
@@ -844,11 +844,11 @@ func makeCorrectTransitionSequenceWithRandomParameters() testFields {
 
 func shouldApplyProcessedBlockEvStep(step *fsmStepTestValues, testBcR *testReactor) bool {
 	if step.event == processedBlockEv {
-		_, err := testBcR.fsm.pool.BlockAndPeerAtHeight(testBcR.fsm.pool.Height)
+		_, err := testBcR.fsm.pool.BlockAndPeerAtHeight(testBcR.fsm.pool.(*BlockPool).Height)
 		if err == errMissingBlock {
 			return false
 		}
-		_, err = testBcR.fsm.pool.BlockAndPeerAtHeight(testBcR.fsm.pool.Height + 1)
+		_, err = testBcR.fsm.pool.BlockAndPeerAtHeight(testBcR.fsm.pool.(*BlockPool).Height + 1)
 		if err == errMissingBlock {
 			return false
 		}
@@ -937,6 +937,10 @@ func (testR *testReactor) resetStateTimer(name string, timer **time.Timer, timeo
 }
 
 func (testR *testReactor) switchToConsensus() {
+}
+
+func (testR *testReactor) lenULB() int64 {
+	return 0
 }
 
 // ----------------------------------------

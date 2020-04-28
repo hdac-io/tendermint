@@ -27,14 +27,31 @@ func initFilesWithConfig(config *cfg.Config) error {
 	// private validator
 	privValKeyFile := config.PrivValidatorKeyFile()
 	privValStateFile := config.PrivValidatorStateFile()
-	var pv *privval.FilePV
+	var pv types.PrivValidator
 	if cmn.FileExists(privValKeyFile) {
-		pv = privval.LoadFilePV(privValKeyFile, privValStateFile)
+		switch config.Consensus.Version {
+		case "tendermint":
+			pv = privval.LoadFilePV(privValKeyFile, privValStateFile)
+		case "friday":
+			pv = privval.LoadFridayFilePV(privValKeyFile, privValStateFile)
+		default:
+			return fmt.Errorf("invalid consensus version %s", config.Consensus.Version)
+		}
 		logger.Info("Found private validator", "keyFile", privValKeyFile,
 			"stateFile", privValStateFile)
 	} else {
-		pv = privval.GenFilePV(privValKeyFile, privValStateFile)
-		pv.Save()
+		switch config.Consensus.Version {
+		case "tendermint":
+			fpv := privval.GenFilePV(privValKeyFile, privValStateFile)
+			fpv.Save()
+			pv = fpv
+		case "friday":
+			ffpv := privval.GenFridayFilePV(privValKeyFile, privValStateFile)
+			ffpv.Save()
+			pv = ffpv
+		default:
+			return fmt.Errorf("invalid consensus version %s", config.Consensus.Version)
+		}
 		logger.Info("Generated private validator", "keyFile", privValKeyFile,
 			"stateFile", privValStateFile)
 	}
@@ -57,7 +74,7 @@ func initFilesWithConfig(config *cfg.Config) error {
 		genDoc := types.GenesisDoc{
 			ChainID:         fmt.Sprintf("test-chain-%v", cmn.RandStr(6)),
 			GenesisTime:     tmtime.Now(),
-			ConsensusParams: types.DefaultConsensusParams(),
+			ConsensusParams: types.DefaultFridayConsensusParams(),
 		}
 		key := pv.GetPubKey()
 		genDoc.Validators = []types.GenesisValidator{{

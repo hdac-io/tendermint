@@ -92,7 +92,7 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 		)
 	}
 
-	config := cfg.DefaultConfig()
+	config := cfg.DefaultFridayConfig()
 
 	// overwrite default config if set and valid
 	if configFile != "" {
@@ -162,7 +162,7 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 	// Generate genesis doc from generated validators
 	genDoc := &types.GenesisDoc{
 		ChainID:         "chain-" + cmn.RandStr(6),
-		ConsensusParams: types.DefaultConsensusParams(),
+		ConsensusParams: types.DefaultFridayConsensusParams(),
 		GenesisTime:     tmtime.Now(),
 		Validators:      genVals,
 	}
