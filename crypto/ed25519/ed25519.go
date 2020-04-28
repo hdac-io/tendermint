@@ -134,7 +134,7 @@ const PubKeyEd25519Size = 32
 // PubKeyEd25519 implements crypto.PubKey for the Ed25519 signature scheme.
 type PubKeyEd25519 [PubKeyEd25519Size]byte
 
-// Address is the SHA256-20 of the raw pubkey bytes.
+// Address is the SHA256-32 of the raw pubkey bytes.
 func (pubKey PubKeyEd25519) Address() crypto.Address {
 	return crypto.Address(tmhash.SumTruncated(pubKey[:]))
 }
