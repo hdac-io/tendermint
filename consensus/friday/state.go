@@ -1208,7 +1208,7 @@ func (cs *ConsensusState) createProposalBlock(height int64) (block *types.Block,
 			prevTotalTxs = prevRs.ProposalBlock.TotalTxs
 		} else {
 			//prev height already going next rounds, so reseted ProposalBlock situation now
-			cs.Logger.Error("consensuns of previous proposal block is failed into createProposalBlock")
+			cs.Logger.Info("consensus of previous proposal block is failed into createProposalBlock")
 			return
 		}
 	}
@@ -1302,7 +1302,7 @@ func (cs *ConsensusState) defaultDoPrevote(height int64, round int) {
 		err := cs.validatePreviousBlock(heightRound.LockedBlock)
 		if err != nil {
 			// ProposalBlock is invalid, prevote nil.
-			logger.Error("enterPrevote: locked block linked previous block is invalid. unlocking", "err", err)
+			logger.Info("enterPrevote: locked block linked previous block is invalid. unlocking", "err", err)
 			heightRound.LockedRound = -1
 			heightRound.LockedBlock = nil
 			heightRound.LockedBlockParts = nil
@@ -1325,12 +1325,18 @@ func (cs *ConsensusState) defaultDoPrevote(height int64, round int) {
 	err := cs.blockExec.ValidateBlock(cs.state, heightRound.ProposalBlock)
 	if err != nil {
 		// ProposalBlock is invalid, prevote nil.
-		logger.Error("enterPrevote: ProposalBlock is invalid", "err", err)
+		isErrorLevel := true
 		switch err.(type) {
 		case *sm.ErrLastBlockIDMismatch:
 			heightRound.ValidRound = -1
 			heightRound.ValidBlock = nil
 			heightRound.ValidBlockParts = nil
+			isErrorLevel = false
+		}
+		if isErrorLevel {
+			logger.Error("enterPrevote: ProposalBlock is invalid", "err", err)
+		} else {
+			logger.Info("enterPrevote: ProposalBlock is invalid", "err", err)
 		}
 		cs.signAddVote(height, types.PrevoteType, nil, types.PartSetHeader{})
 		return
@@ -1340,7 +1346,7 @@ func (cs *ConsensusState) defaultDoPrevote(height int64, round int) {
 	err = cs.validatePreviousBlock(heightRound.ProposalBlock)
 	if err != nil {
 		// ProposalBlock is invalid, prevote nil.
-		logger.Error("enterPrevote: previous block is invalid", "err", err)
+		logger.Info("enterPrevote: previous block is invalid", "err", err)
 		heightRound.ValidRound = -1
 		heightRound.ValidBlock = nil
 		heightRound.ValidBlockParts = nil
@@ -1453,7 +1459,7 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 	// If we're already locked on that block, precommit it, and update the LockedRound
 	if heightRound.LockedBlock.HashesTo(blockID.Hash) {
 		if err := cs.validatePreviousBlock(heightRound.LockedBlock); err != nil {
-			logger.Error("enterPrecommit: lockedBlock linked previous block is invalid. Unlocking", "err", err)
+			logger.Info("enterPrecommit: lockedBlock linked previous block is invalid. Unlocking", "err", err)
 			heightRound.LockedRound = -1
 			heightRound.LockedBlock = nil
 			heightRound.LockedBlockParts = nil
@@ -1486,7 +1492,7 @@ func (cs *ConsensusState) enterPrecommit(height int64, round int) {
 		// Validate previous block if when progressing
 		if err := cs.validatePreviousBlock(heightRound.ProposalBlock); err != nil {
 			// ProposalBlock is invalid, precommit nil.
-			logger.Error("enterPrecommit: previous block is invalid", "err", err)
+			logger.Info("enterPrecommit: previous block is invalid", "err", err)
 			heightRound.ValidRound = -1
 			heightRound.ValidBlock = nil
 			heightRound.ValidBlockParts = nil
