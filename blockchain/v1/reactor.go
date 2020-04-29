@@ -224,7 +224,13 @@ func (bcR *BlockchainReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 		return
 	}
 
-	if err = msg.ValidateBasic(); err != nil {
+	switch bcR.poolVersion {
+	case "tendermint":
+		err = msg.ValidateBasic()
+	case "friday":
+		err = msg.ValidateFridayBasic()
+	}
+	if err != nil {
 		bcR.Logger.Error("peer sent us invalid msg", "peer", src, "msg", msg, "err", err)
 		_ = bcR.swReporter.Report(behaviour.BadMessage(src.ID(), err.Error()))
 		return
