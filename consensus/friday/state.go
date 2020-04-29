@@ -634,6 +634,10 @@ func (cs *ConsensusState) reconstructLastCommit(state sm.State) {
 
 	startReconstructHeight := state.LastBlockHeight - cs.state.ConsensusParams.Block.LenULB + 1
 	for height, i := startReconstructHeight, 0; height <= state.LastBlockHeight; height, i = height+1, i+1 {
+		if height < 1 {
+			continue
+		}
+
 		ulbValidators, err := sm.LoadValidators(cs.blockExec.DB(), height)
 		if err != nil {
 			panic("Cannot load ulb validators into reconstructLastCommit")
