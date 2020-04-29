@@ -552,35 +552,8 @@ func (conR *ConsensusReactor) gossipProgressingRound(
 	ps *PeerState,
 	prs *cstypes.PeerRoundState) {
 	logger := conR.Logger.With("peer", peer, "height", height)
-
-	// Gossip proposal block parts
-	go func(height int64, rs *cstypes.RoundState, prs *cstypes.PeerRoundState) {
-		if prs.ProposalBlockParts == nil {
-			if blockMeta := conR.conS.blockStore.LoadBlockMeta(rs.Height); blockMeta != nil {
-				ps.InitProposalBlockParts(rs.Height, blockMeta.BlockID.PartsHeader)
-				return
-			}
-		}
-
-		if rs.ProposalBlockParts.HasHeader(prs.ProposalBlockPartsHeader) {
-			if index, ok := rs.ProposalBlockParts.BitArray().Sub(prs.ProposalBlockParts.Copy()).PickRandom(); ok {
-				part := rs.ProposalBlockParts.GetPart(index)
-				msg := &BlockPartMessage{
-					Height: rs.Height, // This tells peer that this part applies to us.
-					Round:  rs.Round,  // This tells peer that this part applies to us.
-					Part:   part,
-				}
-				logger.Debug("Sending block part", "round", prs.Round)
-				if peer.Send(DataChannel, cdc.MustMarshalBinaryBare(msg)) {
-					ps.SetHasProposalBlockPart(prs.Height, prs.Round, index)
-				}
-				return
-			}
-		}
-	}(height, rs, prs)
-
 	//Gossip proposal
-	go func(height int64, rs *cstypes.RoundState, prs *cstypes.PeerRoundState) {
+	func(height int64, rs *cstypes.RoundState, prs *cstypes.PeerRoundState) {
 		// Send Proposal && ProposalPOL BitArray?
 		if rs.Proposal != nil && !prs.Proposal {
 			// Proposal: share the proposal metadata with peer.
@@ -606,6 +579,32 @@ func (conR *ConsensusReactor) gossipProgressingRound(
 				peer.Send(DataChannel, cdc.MustMarshalBinaryBare(msg))
 			}
 			return
+		}
+	}(height, rs, prs)
+
+	// Gossip proposal block parts
+	go func(height int64, rs *cstypes.RoundState, prs *cstypes.PeerRoundState) {
+		if prs.ProposalBlockParts == nil {
+			if blockMeta := conR.conS.blockStore.LoadBlockMeta(rs.Height); blockMeta != nil {
+				ps.InitProposalBlockParts(rs.Height, blockMeta.BlockID.PartsHeader)
+				return
+			}
+		}
+
+		if rs.ProposalBlockParts.HasHeader(prs.ProposalBlockPartsHeader) {
+			if index, ok := rs.ProposalBlockParts.BitArray().Sub(prs.ProposalBlockParts.Copy()).PickRandom(); ok {
+				part := rs.ProposalBlockParts.GetPart(index)
+				msg := &BlockPartMessage{
+					Height: rs.Height, // This tells peer that this part applies to us.
+					Round:  rs.Round,  // This tells peer that this part applies to us.
+					Part:   part,
+				}
+				logger.Debug("Sending block part", "round", prs.Round)
+				if peer.Send(DataChannel, cdc.MustMarshalBinaryBare(msg)) {
+					ps.SetHasProposalBlockPart(prs.Height, prs.Round, index)
+				}
+				return
+			}
 		}
 	}(height, rs, prs)
 }
