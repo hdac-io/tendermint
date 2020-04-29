@@ -163,7 +163,10 @@ func (conR *ConsensusReactor) GetChannels() []*p2p.ChannelDescriptor {
 
 // InitPeer implements Reactor by creating a state for the peer.
 func (conR *ConsensusReactor) InitPeer(peer p2p.Peer) p2p.Peer {
-	peerState := NewPeerState(peer).SetLogger(conR.Logger)
+	peerState := NewPeerState(
+		peer,
+		func() int64 { return conR.conS.state.ConsensusParams.Block.LenULB },
+	).SetLogger(conR.Logger)
 	peer.Set(types.PeerStateKey, peerState)
 	return peer
 }
@@ -921,13 +924,16 @@ var (
 	ErrPeerStateInvalidStartTime = errors.New("Error peer state invalid startTime")
 )
 
+type ULBLengthHandler func() int64
+
 // PeerState contains the known state of a peer, including its connection and
 // threadsafe access to its PeerRoundState.
 // NOTE: THIS GETS DUMPED WITH rpc/core/consensus.go.
 // Be mindful of what you Expose.
 type PeerState struct {
-	peer   p2p.Peer
-	logger log.Logger
+	peer       p2p.Peer
+	logger     log.Logger
+	ulbHandler ULBLengthHandler
 
 	highestHeight int64
 	mtx           sync.Mutex      // NOTE: Modify below using setters, never directly.
@@ -947,10 +953,11 @@ func (pss peerStateStats) String() string {
 }
 
 // NewPeerState returns a new PeerState for the given Peer
-func NewPeerState(peer p2p.Peer) *PeerState {
+func NewPeerState(peer p2p.Peer, ulbHandler ULBLengthHandler) *PeerState {
 	return &PeerState{
 		peer:          peer,
 		logger:        log.NewNopLogger(),
+		ulbHandler:    ulbHandler,
 		highestHeight: 0,
 		PRS:           sync.Map{},
 		Stats:         &peerStateStats{},
@@ -1265,7 +1272,7 @@ func (ps *PeerState) ApplyNewRoundStepMessage(msg *NewRoundStepMessage) {
 	defer ps.mtx.Unlock()
 
 	if msg.Step == cstypes.RoundStepCommit {
-		ps.PRS.Delete(msg.Height)
+		ps.PRS.Delete(msg.Height - ps.ulbHandler())
 		return
 	}
 
