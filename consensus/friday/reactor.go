@@ -499,48 +499,50 @@ OUTER_LOOP:
 			return
 		}
 
-		// Gossip for progressing rounds
-		conR.conS.GetRoundStatesMap().Range(func(key, value interface{}) bool {
-			height := key.(int64)
-			// don't directly use value arg of map range method
-			// must be copy before using round state
-			rs := conR.conS.GetRoundState(height)
-			if rs == nil {
-				return true
-			}
-
-			prs := ps.GetRoundState(height)
-			if prs == nil {
-				return true
-			}
-
-			conR.gossipProgressingRound(height, rs, peer, ps, prs)
-			return true
-		})
-
 		// Gossip for catchup
-		ps.GetRoundStatesMap().Range(func(key, value interface{}) bool {
-			prsHeight := key.(int64)
+		if ps.GetHeight() < conR.conS.GetLastHeight() {
+			ps.GetRoundStatesMap().Range(func(key, value interface{}) bool {
+				prsHeight := key.(int64)
 
-			if prsHeight > 0 && prsHeight <= conR.conS.GetLastHeight() {
-				prs := value.(*cstypes.PeerRoundState)
+				if prsHeight > 0 && prsHeight <= conR.conS.GetLastHeight() {
+					prs := value.(*cstypes.PeerRoundState)
 
-				if prs.ProposalBlockParts == nil {
-					blockMeta := conR.conS.blockStore.LoadBlockMeta(prsHeight)
-					if blockMeta == nil {
-						panic(fmt.Sprintf("Failed to load block %d when blockStore is at %d",
-							prsHeight, conR.conS.blockStore.Height()))
+					if prs.ProposalBlockParts == nil {
+						blockMeta := conR.conS.blockStore.LoadBlockMeta(prsHeight)
+						if blockMeta == nil {
+							panic(fmt.Sprintf("Failed to load block %d when blockStore is at %d",
+								prsHeight, conR.conS.blockStore.Height()))
+						}
+						ps.InitProposalBlockParts(prsHeight, blockMeta.BlockID.PartsHeader)
+						// continue the loop since prs is a copy and not effected by this initialization
+						//return true
 					}
-					ps.InitProposalBlockParts(prsHeight, blockMeta.BlockID.PartsHeader)
-					// continue the loop since prs is a copy and not effected by this initialization
+
+					conR.gossipDataForCatchupPerPRS(prs, ps, peer)
+				}
+
+				return true
+			})
+		} else {
+			// Gossip for progressing rounds
+			conR.conS.GetRoundStatesMap().Range(func(key, value interface{}) bool {
+				height := key.(int64)
+				// don't directly use value arg of map range method
+				// must be copy before using round state
+				rs := conR.conS.GetRoundState(height)
+				if rs == nil {
 					return true
 				}
 
-				conR.gossipDataForCatchupPerPRS(prs, ps, peer)
-			}
+				prs := ps.GetRoundState(height)
+				if prs == nil {
+					return true
+				}
 
-			return true
-		})
+				conR.gossipProgressingRound(height, rs, peer, ps, prs)
+				return true
+			})
+		}
 
 		// Nothing to do. Sleep.
 		time.Sleep(conR.conS.config.PeerGossipSleepDuration)
