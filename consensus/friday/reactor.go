@@ -499,6 +499,7 @@ OUTER_LOOP:
 			return
 		}
 
+		continuous := false
 		// Gossip for catchup
 		if ps.GetHeight() < conR.conS.GetLastHeight() {
 			ps.GetRoundStatesMap().Range(func(key, value interface{}) bool {
@@ -519,6 +520,7 @@ OUTER_LOOP:
 					}
 
 					conR.gossipDataForCatchupPerPRS(prs, ps, peer)
+					continuous = true
 				}
 
 				return true
@@ -545,7 +547,9 @@ OUTER_LOOP:
 		}
 
 		// Nothing to do. Sleep.
-		time.Sleep(conR.conS.config.PeerGossipSleepDuration)
+		if !continuous {
+			time.Sleep(conR.conS.config.PeerGossipSleepDuration)
+		}
 		continue OUTER_LOOP
 	}
 }
@@ -668,6 +672,7 @@ OUTER_LOOP:
 			return
 		}
 
+		continuous := false
 		ps.GetRoundStatesMap().Range(func(key, value interface{}) bool {
 			height := key.(int64)
 			commitedHeight := conR.conS.GetLastHeight()
@@ -678,6 +683,7 @@ OUTER_LOOP:
 				if ps.PickSendVote(commit) {
 					logger.Info("Picked Catchup commit to send", "height", height)
 				}
+				continuous = true
 				return true
 
 			} else if height != 0 && height > commitedHeight {
@@ -692,7 +698,9 @@ OUTER_LOOP:
 			return false
 		})
 
-		time.Sleep(conR.conS.config.PeerGossipSleepDuration)
+		if !continuous {
+			time.Sleep(conR.conS.config.PeerGossipSleepDuration)
+		}
 		continue OUTER_LOOP
 	}
 }
