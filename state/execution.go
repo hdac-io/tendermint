@@ -153,7 +153,7 @@ func (blockExec *BlockExecutor) ReserveBlock(state State, block *types.Block) er
 	if block == nil {
 		return fmt.Errorf("block is nil")
 	}
-	blockExec.mempool.Reserve(block.Txs)
+	blockExec.mempool.Reserve(block.Height, block.Txs)
 	return nil
 }
 
