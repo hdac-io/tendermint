@@ -22,7 +22,7 @@ const (
 	trySendIntervalMS = 10
 
 	// ask for best height every 10s
-	statusUpdateIntervalSeconds = 10
+	statusUpdateIntervalSeconds = 1
 
 	// NOTE: keep up to date with bcBlockResponseMessage
 	bcBlockResponseMessagePrefixSize   = 4

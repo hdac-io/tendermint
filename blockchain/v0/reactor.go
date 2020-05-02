@@ -26,7 +26,8 @@ const (
 	// stopSyncingDurationMinutes = 10
 
 	// ask for best height every 10s
-	statusUpdateIntervalSeconds = 10
+	// NOTE: friday change update interval seconds to 1s, avg block time so faster
+	statusUpdateIntervalSeconds = 1
 	// check if we should switch to consensus reactor
 	switchToConsensusIntervalSeconds = 1
 
