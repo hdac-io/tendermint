@@ -150,18 +150,17 @@ func (blockExec *BlockExecutor) ValidateBlock(state State, block *types.Block) e
 // ReserveBlock marking txs to 'reserved' into mempool from received proposal
 // Its for locking reap from mempool
 func (blockExec *BlockExecutor) ReserveBlock(state State, block *types.Block) error {
-	if err := blockExec.ValidateBlock(state, block); err != nil {
-		return ErrInvalidBlock(err)
+	if block == nil {
+		return fmt.Errorf("block is nil")
 	}
-
 	blockExec.mempool.Reserve(block.Txs)
 	return nil
 }
 
 // UnreserveBlock unmarking txs to 'reserved' into mempool from received proposal
 func (blockExec *BlockExecutor) UnreserveBlock(state State, block *types.Block) error {
-	if err := blockExec.ValidateBlock(state, block); err != nil {
-		return ErrInvalidBlock(err)
+	if block == nil {
+		return fmt.Errorf("block is nil")
 	}
 
 	blockExec.mempool.Unreserve(block.Txs)
