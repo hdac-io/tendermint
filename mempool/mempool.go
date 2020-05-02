@@ -41,7 +41,7 @@ type Mempool interface {
 	Unlock()
 
 	// Reserve Update marking reserve the mempool that the given txs were received proposal block.
-	Reserve(blockTxs types.Txs)
+	Reserve(blockHeight int64, blockTxs types.Txs)
 
 	// Unreserve Update unmarking reserve the mempool that the given txs were previous failed round proposal block.
 	Unreserve(blockTxs types.Txs)

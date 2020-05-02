@@ -479,7 +479,9 @@ func (mem *CListMempool) ReapMaxBytesMaxGas(maxBytes, maxGas int64) types.Txs {
 	txs := make([]types.Tx, 0, mem.txs.Len())
 	for e := mem.txs.Front(); e != nil; e = e.Next() {
 		memTx := e.Value.(*mempoolTx)
-		if _, reserved := mem.reserveTxsMap.Load(txKey(memTx.tx)); reserved {
+		txHash := txKey(memTx.tx)
+		if blockHeight, reserved := mem.reserveTxsMap.Load(txHash); reserved {
+			mem.logger.Info("skip reserved tx", "height", blockHeight.(int64), "hash", cmn.HexBytes(txHash[:]))
 			continue
 		}
 
@@ -519,7 +521,9 @@ func (mem *CListMempool) ReapMaxTxs(max int) types.Txs {
 	txs := make([]types.Tx, 0, cmn.MinInt(mem.txs.Len(), max))
 	for e := mem.txs.Front(); e != nil && len(txs) <= max; e = e.Next() {
 		memTx := e.Value.(*mempoolTx)
-		if _, reserved := mem.reserveTxsMap.Load(txKey(memTx.tx)); reserved {
+		txHash := txKey(memTx.tx)
+		if blockHeight, reserved := mem.reserveTxsMap.Load(txHash); reserved {
+			mem.logger.Info("skip reserved tx", "height", blockHeight.(int64), "hash", cmn.HexBytes(txHash[:]))
 			continue
 		}
 
@@ -529,12 +533,12 @@ func (mem *CListMempool) ReapMaxTxs(max int) types.Txs {
 }
 
 // Reserve marking reserve the mempool that the given txs were received proposal block.
-func (mem *CListMempool) Reserve(blockTxs types.Txs) {
+func (mem *CListMempool) Reserve(blockHeight int64, blockTxs types.Txs) {
 	mem.proxyMtx.Lock()
 	defer mem.proxyMtx.Unlock()
 
 	for _, tx := range blockTxs {
-		mem.reserveTxsMap.Store(txKey(tx), true)
+		mem.reserveTxsMap.Store(txKey(tx), blockHeight)
 	}
 }
 
