@@ -530,12 +530,18 @@ func (mem *CListMempool) ReapMaxTxs(max int) types.Txs {
 
 // Reserve marking reserve the mempool that the given txs were received proposal block.
 func (mem *CListMempool) Reserve(blockTxs types.Txs) {
+	mem.proxyMtx.Lock()
+	defer mem.proxyMtx.Unlock()
+
 	for _, tx := range blockTxs {
 		mem.reserveTxsMap.Store(txKey(tx), true)
 	}
 }
 
 func (mem *CListMempool) Unreserve(blockTxs types.Txs) {
+	mem.proxyMtx.Lock()
+	defer mem.proxyMtx.Unlock()
+
 	for _, tx := range blockTxs {
 		mem.reserveTxsMap.Delete(txKey(tx))
 	}
