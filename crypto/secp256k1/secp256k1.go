@@ -141,11 +141,8 @@ type PubKeySecp256k1 [PubKeySecp256k1Size]byte
 
 // Address returns a friday style addresses: BLAKE2B-256(pubkey)
 func (pubKey PubKeySecp256k1) Address() crypto.Address {
-	if blake2b256, err := blake2b.New256(pubKey[:]); err != nil {
-		panic(err)
-	} else {
-		return crypto.Address(blake2b256.Sum(nil))
-	}
+	hashedPubKey := blake2b.Sum256(pubKey[:])
+	return crypto.Address(hashedPubKey[:])
 }
 
 // Bytes returns the pubkey marshalled with amino encoding.
