@@ -37,6 +37,7 @@ type GenesisValidator struct {
 type GenesisDoc struct {
 	GenesisTime     time.Time          `json:"genesis_time"`
 	ChainID         string             `json:"chain_id"`
+	ConsensusModule string             `json:"consensus_module"`
 	ConsensusParams *ConsensusParams   `json:"consensus_params,omitempty"`
 	Validators      []GenesisValidator `json:"validators,omitempty"`
 	AppHash         cmn.HexBytes       `json:"app_hash"`
@@ -94,6 +95,12 @@ func (genDoc *GenesisDoc) ValidateAndComplete() error {
 		genDoc.GenesisTime = tmtime.Now()
 	}
 
+	switch genDoc.ConsensusModule {
+	case "friday":
+	case "tendermint":
+	default:
+		return errors.Errorf("invalid consenssus module %s", genDoc.ConsensusModule)
+	}
 	return nil
 }
 

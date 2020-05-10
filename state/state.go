@@ -267,6 +267,7 @@ func MakeGenesisState(genDoc *types.GenesisDoc) (State, error) {
 		nextValidatorSet = types.NewValidatorSet(validators).CopyIncrementProposerPriority(1)
 	}
 
+	initStateVersion.Consensus.Module = genDoc.ConsensusModule
 	return State{
 		Version: initStateVersion,
 		ChainID: genDoc.ChainID,
