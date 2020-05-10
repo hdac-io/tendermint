@@ -759,7 +759,7 @@ func (cfg *FastSyncConfig) ValidateBasic() error {
 // ConsensusConfig defines the configuration for the Tendermint consensus service,
 // including timeouts and details about the WAL and the block structure.
 type ConsensusConfig struct {
-	Version string `mapstructure:"version"`
+	Module string `mapstructure:"module"`
 
 	RootDir string `mapstructure:"home"`
 	WalPath string `mapstructure:"wal_file"`
@@ -788,7 +788,7 @@ type ConsensusConfig struct {
 // DefaultConsensusConfig returns a default configuration for the consensus service
 func DefaultConsensusConfig() *ConsensusConfig {
 	return &ConsensusConfig{
-		Version:                     "tendermint",
+		Module:                      "tendermint",
 		WalPath:                     filepath.Join(defaultDataDir, "cs.wal", "wal"),
 		TimeoutPropose:              3000 * time.Millisecond,
 		TimeoutProposeDelta:         500 * time.Millisecond,
@@ -808,7 +808,7 @@ func DefaultConsensusConfig() *ConsensusConfig {
 // DefaultFridayConsensusConfig returns a specialized friday default configuration for the consensus service
 func DefaultFridayConsensusConfig() *ConsensusConfig {
 	cfg := DefaultConsensusConfig()
-	cfg.Version = "friday"
+	cfg.Module = "friday"
 	return cfg
 }
 
@@ -831,7 +831,7 @@ func TestConsensusConfig() *ConsensusConfig {
 // TestFridayConsensusConfig returns a configuration for testing the friday consensus service
 func TestFridayConsensusConfig() *ConsensusConfig {
 	cfg := TestConsensusConfig()
-	cfg.Version = "friday"
+	cfg.Module = "friday"
 	return cfg
 }
 
@@ -883,11 +883,11 @@ func (cfg *ConsensusConfig) SetWalFile(walFile string) {
 // returns an error if any check fails.
 func (cfg *ConsensusConfig) ValidateBasic() error {
 
-	switch cfg.Version {
+	switch cfg.Module {
 	case "tendermint":
 	case "friday":
 	default:
-		return errors.New("invalid consensus version")
+		return errors.New("invalid consensus module")
 	}
 
 	if cfg.TimeoutPropose < 0 {

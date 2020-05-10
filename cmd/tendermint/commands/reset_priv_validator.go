@@ -64,7 +64,7 @@ func ResetAll(dbDir, addrBookFile, privValKeyFile, privValStateFile string, logg
 
 func resetFilePV(privValKeyFile, privValStateFile string, logger log.Logger) {
 	if _, err := os.Stat(privValKeyFile); err == nil {
-		switch config.Consensus.Version {
+		switch config.Consensus.Module {
 		case "tendermint":
 			pv := privval.LoadFilePVEmptyState(privValKeyFile, privValStateFile)
 			pv.Reset()
@@ -72,14 +72,14 @@ func resetFilePV(privValKeyFile, privValStateFile string, logger log.Logger) {
 			pv := privval.LoadFridayFilePVEmptyState(privValKeyFile, privValStateFile)
 			pv.Reset()
 		default:
-			logger.Error("invalid consensus version", "version", config.Consensus.Version)
+			logger.Error("invalid consensus module", "module", config.Consensus.Module)
 			return
 		}
 
 		logger.Info("Reset private validator file to genesis state", "keyFile", privValKeyFile,
 			"stateFile", privValStateFile)
 	} else {
-		switch config.Consensus.Version {
+		switch config.Consensus.Module {
 		case "tendermint":
 			pv := privval.GenFilePV(privValKeyFile, privValStateFile)
 			pv.Save()
@@ -87,7 +87,7 @@ func resetFilePV(privValKeyFile, privValStateFile string, logger log.Logger) {
 			pv := privval.GenFridayFilePV(privValKeyFile, privValStateFile)
 			pv.Save()
 		default:
-			logger.Error("invalid consensus version", "version", config.Consensus.Version)
+			logger.Error("invalid consensus module", "version", config.Consensus.Module)
 			return
 		}
 

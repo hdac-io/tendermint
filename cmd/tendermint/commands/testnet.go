@@ -161,20 +161,20 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 
 	// Generate genesis doc from generated validators
 	var consensusParams *types.ConsensusParams
-	switch config.Consensus.Version {
+	switch config.Consensus.Module {
 	case "friday":
 		consensusParams = types.DefaultFridayConsensusParams()
 	case "tendermint":
 		consensusParams = types.DefaultConsensusParams()
 	default:
-		return fmt.Errorf("invalid consensus version %s", config.Consensus.Version)
+		return fmt.Errorf("invalid consensus module %s", config.Consensus.Module)
 	}
 	genDoc := &types.GenesisDoc{
 		ChainID:         "chain-" + cmn.RandStr(6),
 		ConsensusParams: consensusParams,
 		GenesisTime:     tmtime.Now(),
 		Validators:      genVals,
-		ConsensusModule: config.Consensus.Version,
+		ConsensusModule: config.Consensus.Module,
 	}
 
 	// Write genesis file.

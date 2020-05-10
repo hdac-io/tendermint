@@ -111,13 +111,13 @@ func DefaultNewNode(config *cfg.Config, logger log.Logger) (*Node, error) {
 	}
 
 	var privVal types.PrivValidator
-	switch config.Consensus.Version {
+	switch config.Consensus.Module {
 	case "tendermint":
 		privVal = privval.LoadOrGenFilePV(newPrivValKey, newPrivValState)
 	case "friday":
 		privVal = privval.LoadOrGenFridayFilePV(newPrivValKey, newPrivValState)
 	default:
-		return nil, fmt.Errorf("invalid consensus version %s", config.Consensus.Version)
+		return nil, fmt.Errorf("invalid consensus module %s", config.Consensus.Module)
 	}
 
 	return NewNode(config,
@@ -281,7 +281,7 @@ func doHandshake(config *cfg.Config, stateDB dbm.DB, state sm.State, blockStore 
 	genDoc *types.GenesisDoc, eventBus *types.EventBus, proxyApp proxy.AppConns, consensusLogger log.Logger) error {
 
 	// Handshaker it's only used here. don't abstract.
-	switch config.Consensus.Version {
+	switch config.Consensus.Module {
 	case "tendermint":
 		handshaker := cs.NewHandshaker(stateDB, state, blockStore, genDoc)
 		handshaker.SetLogger(consensusLogger)
@@ -407,7 +407,7 @@ func createConsensusReactor(config *cfg.Config,
 	var consensusState consensus.IConsensusState
 	var consensusReactor consensus.IConsensusReactor
 
-	switch config.Consensus.Version {
+	switch config.Consensus.Module {
 	case "tendermint":
 		tmConsensusState := consensus.NewConsensusState(
 			config.Consensus,
