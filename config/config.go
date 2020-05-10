@@ -92,7 +92,7 @@ func DefaultFridayConfig() *Config {
 		RPC:             DefaultRPCConfig(),
 		P2P:             DefaultP2PConfig(),
 		Mempool:         DefaultMempoolConfig(),
-		FastSync:        DefaultFridayFastSyncConfig(),
+		FastSync:        DefaultFastSyncConfig(),
 		Consensus:       DefaultFridayConsensusConfig(),
 		TxIndex:         DefaultTxIndexConfig(),
 		Instrumentation: DefaultInstrumentationConfig(),
@@ -120,7 +120,7 @@ func TestFridayConfig() *Config {
 		RPC:             TestRPCConfig(),
 		P2P:             TestP2PConfig(),
 		Mempool:         TestMempoolConfig(),
-		FastSync:        TestFridayFastSyncConfig(),
+		FastSync:        TestFastSyncConfig(),
 		Consensus:       TestFridayConsensusConfig(),
 		TxIndex:         TestTxIndexConfig(),
 		Instrumentation: TestInstrumentationConfig(),
@@ -725,34 +725,19 @@ func (cfg *MempoolConfig) ValidateBasic() error {
 
 // FastSyncConfig defines the configuration for the Tendermint fast sync service
 type FastSyncConfig struct {
-	Version     string `mapstructure:"version"`
-	PoolVersion string `mapstructure:"pool_version"`
+	Version string `mapstructure:"version"`
 }
 
 // DefaultFastSyncConfig returns a default configuration for the fast sync service
 func DefaultFastSyncConfig() *FastSyncConfig {
 	return &FastSyncConfig{
-		Version:     "v0",
-		PoolVersion: "tendermint",
-	}
-}
-
-// DefaultFridayFastSyncConfig returns a default specialized friday configuration for the fast sync service
-func DefaultFridayFastSyncConfig() *FastSyncConfig {
-	return &FastSyncConfig{
-		Version:     "v0",
-		PoolVersion: "friday",
+		Version: "v0",
 	}
 }
 
 // TestFastSyncConfig returns a default configuration for the fast sync.
 func TestFastSyncConfig() *FastSyncConfig {
 	return DefaultFastSyncConfig()
-}
-
-// TestFridayFastSyncConfig returns a default configuration for the fast sync.
-func TestFridayFastSyncConfig() *FastSyncConfig {
-	return DefaultFridayFastSyncConfig()
 }
 
 // ValidateBasic performs basic validation.
@@ -763,13 +748,6 @@ func (cfg *FastSyncConfig) ValidateBasic() error {
 	case "v1":
 	default:
 		err = fmt.Errorf("unknown fastsync version %s", cfg.Version)
-	}
-
-	switch cfg.PoolVersion {
-	case "tendermint":
-	case "friday":
-	default:
-		err = fmt.Errorf("unknown fastsync pool version %s", cfg.PoolVersion)
 	}
 
 	return err
