@@ -61,8 +61,6 @@ type BlockchainReactor struct {
 	fsm          *BcReactorFSM
 	blocksSynced int
 
-	poolVersion string
-
 	// Receive goroutine forwards messages to this channel to be processed in the context of the poolRoutine.
 	messagesForFSMCh chan bcReactorMessage
 
@@ -79,7 +77,7 @@ type BlockchainReactor struct {
 
 // NewBlockchainReactor returns new reactor instance.
 func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *store.BlockStore,
-	fastSync bool, poolVersion string) *BlockchainReactor {
+	fastSync bool) *BlockchainReactor {
 
 	if state.LastBlockHeight != store.Height() {
 		panic(fmt.Sprintf("state (%v) and store (%v) height mismatch", state.LastBlockHeight,
@@ -98,12 +96,11 @@ func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *st
 		blockExec:        blockExec,
 		fastSync:         fastSync,
 		store:            store,
-		poolVersion:      poolVersion,
 		messagesForFSMCh: messagesForFSMCh,
 		eventsFromFSMCh:  eventsFromFSMCh,
 		errorsForFSMCh:   errorsForFSMCh,
 	}
-	fsm := NewFSM(startHeight, bcR, poolVersion)
+	fsm := NewFSM(startHeight, bcR, bcR.initialState.Version.Consensus.Module)
 	bcR.fsm = fsm
 	bcR.BaseReactor = *p2p.NewBaseReactor("BlockchainReactor", bcR)
 	//bcR.swReporter = behaviour.NewSwitcReporter(bcR.BaseReactor.Switch)
@@ -224,7 +221,7 @@ func (bcR *BlockchainReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 		return
 	}
 
-	switch bcR.poolVersion {
+	switch bcR.initialState.Version.Consensus.Module {
 	case "tendermint":
 		err = msg.ValidateBasic()
 	case "friday":
@@ -429,7 +426,7 @@ func (bcR *BlockchainReactor) processBlock() error {
 	// NOTE: we can probably make this more efficient, but note that calling
 	// first.Hash() doesn't verify the tx contents, so MakePartSet() is
 	// currently necessary.
-	switch bcR.poolVersion {
+	switch bcR.initialState.Version.Consensus.Module {
 	case "tendermint":
 		err = bcR.state.Validators.VerifyCommit(
 			chainID, firstID, first.Height, second.LastCommit)
@@ -441,7 +438,7 @@ func (bcR *BlockchainReactor) processBlock() error {
 			err = valErr
 		}
 	default:
-		panic(fmt.Sprintf("unknown pool version %s", bcR.poolVersion))
+		panic(fmt.Sprintf("unknown consensus module %s", bcR.initialState.Version.Consensus.Module))
 	}
 	if err != nil {
 		bcR.Logger.Error("error during commit verification", "err", err,
@@ -449,13 +446,13 @@ func (bcR *BlockchainReactor) processBlock() error {
 		return errBlockVerificationFailure
 	}
 
-	switch bcR.poolVersion {
+	switch bcR.initialState.Version.Consensus.Module {
 	case "tendermint":
 		bcR.store.SaveBlock(first, firstParts, second.LastCommit, 1)
 	case "friday":
 		bcR.store.SaveBlock(first, firstParts, second.LastCommit, bcR.state.ConsensusParams.Block.LenULB)
 	default:
-		panic(fmt.Sprintf("unknown pool version %s", bcR.poolVersion))
+		panic(fmt.Sprintf("unknown consensus module %s", bcR.initialState.Version.Consensus.Module))
 	}
 
 	bcR.state, err = bcR.blockExec.ApplyBlock(bcR.state, firstID, first)

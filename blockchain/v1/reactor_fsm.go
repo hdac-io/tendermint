@@ -45,7 +45,7 @@ type BcReactorFSM struct {
 }
 
 // NewFSM creates a new reactor FSM.
-func NewFSM(height int64, toBcR bcReactor, version string) *BcReactorFSM {
+func NewFSM(height int64, toBcR bcReactor, consensusModule string) *BcReactorFSM {
 
 	fsm := BcReactorFSM{
 		state:     unknown,
@@ -54,7 +54,7 @@ func NewFSM(height int64, toBcR bcReactor, version string) *BcReactorFSM {
 	}
 
 	var pool IBlockPool
-	switch version {
+	switch consensusModule {
 	case "tendermint":
 		pool = NewBlockPool(height, toBcR)
 	case "friday":
@@ -62,7 +62,7 @@ func NewFSM(height int64, toBcR bcReactor, version string) *BcReactorFSM {
 			return fsm.toBcR.lenULB()
 		})
 	default:
-		panic(fmt.Sprintf("invalid pool version %s", version))
+		panic(fmt.Sprintf("invalid consensusModule %s", consensusModule))
 	}
 	fsm.pool = pool
 	return &fsm

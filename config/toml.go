@@ -312,11 +312,6 @@ max_tx_bytes = {{ .Mempool.MaxTxBytes }}
 #   2) "v1" - refactor of v0 version for better testability
 version = "{{ .FastSync.Version }}"
 
-# Fast Sync pool version to use:
-#   1) "tendermint" (default) - the default fast sync implementation
-#   2) "friday" - the customize implementation for friday consensus
-pool_version = "{{ .FastSync.PoolVersion }}"
-
 ##### consensus configuration options #####
 [consensus]
 

@@ -62,11 +62,10 @@ type BlockchainReactor struct {
 	initialState sm.State
 	latestState  sm.State
 
-	blockExec   *sm.BlockExecutor
-	store       *store.BlockStore
-	pool        IBlockPool
-	poolVersion string
-	fastSync    bool
+	blockExec *sm.BlockExecutor
+	store     *store.BlockStore
+	pool      IBlockPool
+	fastSync  bool
 
 	requestsCh <-chan BlockRequest
 	errorsCh   <-chan peerError
@@ -74,7 +73,7 @@ type BlockchainReactor struct {
 
 // NewBlockchainReactor returns new reactor instance.
 func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *store.BlockStore,
-	fastSync bool, poolVersion string) *BlockchainReactor {
+	fastSync bool) *BlockchainReactor {
 
 	if state.LastBlockHeight != store.Height() {
 		panic(fmt.Sprintf("state (%v) and store (%v) height mismatch", state.LastBlockHeight,
@@ -98,7 +97,7 @@ func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *st
 
 	//lazy initialize pool field because of setup to friday ulb length handler
 	var pool IBlockPool
-	switch poolVersion {
+	switch state.Version.Consensus.Module {
 	case "tendermint":
 		pool = NewBlockPool(
 			store.Height()+1,
@@ -117,10 +116,9 @@ func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *st
 		)
 
 	default:
-		panic(fmt.Sprintf("unknown pool version %s", poolVersion))
+		panic(fmt.Sprintf("unknown consensus module %s", state.Version.Consensus.Module))
 	}
 	bcR.pool = pool
-	bcR.poolVersion = poolVersion
 
 	bcR.BaseReactor = *p2p.NewBaseReactor("BlockchainReactor", bcR)
 	return bcR
@@ -204,7 +202,7 @@ func (bcR *BlockchainReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 		bcR.Switch.StopPeerForError(src, err)
 		return
 	}
-	switch bcR.poolVersion {
+	switch bcR.initialState.Version.Consensus.Module {
 	case "tendermint":
 		err = msg.ValidateBasic()
 	case "friday":
@@ -340,7 +338,7 @@ FOR_LOOP:
 			// first.Hash() doesn't verify the tx contents, so MakePartSet() is
 			// currently necessary.
 			var err error
-			switch bcR.poolVersion {
+			switch bcR.initialState.Version.Consensus.Module {
 			case "tendermint":
 				err = state.Validators.VerifyCommit(
 					chainID, firstID, first.Height, second.LastCommit)
@@ -352,7 +350,7 @@ FOR_LOOP:
 					err = valErr
 				}
 			default:
-				panic(fmt.Sprintf("unknown pool version %s", bcR.poolVersion))
+				panic(fmt.Sprintf("unknown consensus module %s", bcR.initialState.Version.Consensus.Module))
 			}
 
 			if err != nil {
@@ -376,13 +374,13 @@ FOR_LOOP:
 				bcR.pool.PopRequest()
 
 				// TODO: batch saves so we dont persist to disk every block
-				switch bcR.poolVersion {
+				switch bcR.initialState.Version.Consensus.Module {
 				case "tendermint":
 					bcR.store.SaveBlock(first, firstParts, second.LastCommit, 1)
 				case "friday":
 					bcR.store.SaveBlock(first, firstParts, second.LastCommit, state.ConsensusParams.Block.LenULB)
 				default:
-					panic(fmt.Sprintf("unknown pool version %s", bcR.poolVersion))
+					panic(fmt.Sprintf("unknown consensus module %s", bcR.initialState.Version.Consensus.Module))
 				}
 
 				// TODO: same thing for app - but we would need a way to
