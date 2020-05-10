@@ -71,10 +71,20 @@ func initFilesWithConfig(config *cfg.Config) error {
 	if cmn.FileExists(genFile) {
 		logger.Info("Found genesis file", "path", genFile)
 	} else {
+		var consensusParams *types.ConsensusParams
+		switch config.Consensus.Version {
+		case "tednermint":
+			consensusParams = types.DefaultConsensusParams()
+		case "friday":
+			consensusParams = types.DefaultFridayConsensusParams()
+		default:
+			return fmt.Errorf("invalid consensus version %s", config.Consensus.Version)
+		}
 		genDoc := types.GenesisDoc{
 			ChainID:         fmt.Sprintf("test-chain-%v", cmn.RandStr(6)),
 			GenesisTime:     tmtime.Now(),
-			ConsensusParams: types.DefaultFridayConsensusParams(),
+			ConsensusParams: consensusParams,
+			ConsensusModule: config.Consensus.Version,
 		}
 		key := pv.GetPubKey()
 		genDoc.Validators = []types.GenesisValidator{{

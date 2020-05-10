@@ -14,7 +14,7 @@ import (
 // Validate block
 
 func validateBlock(store BlockStore, evidencePool EvidencePool, stateDB dbm.DB, state State, block *types.Block) error {
-	if state.ConsensusParams.Block.LenULB != 0 {
+	if state.Version.Consensus.Module == "friday" {
 		return fridayValidateBlock(store, evidencePool, stateDB, state, block)
 	} else {
 		return tmValidateBlock(evidencePool, stateDB, state, block)

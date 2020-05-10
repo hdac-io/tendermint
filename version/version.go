@@ -61,6 +61,7 @@ type App struct {
 // including all blockchain data structures and the rules of the application's
 // state transition machine.
 type Consensus struct {
-	Block Protocol `json:"block"`
-	App   Protocol `json:"app"`
+	Block  Protocol `json:"block"`
+	App    Protocol `json:"app"`
+	Module string   `json:"module"`
 }
