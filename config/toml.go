@@ -318,7 +318,7 @@ version = "{{ .FastSync.Version }}"
 # Consensus version to use:
 #   1) "tendermint" (default) - the default consensus implementation
 #   2) "friday" - the friday consensus implementation 
-version = "{{ .Consensus.Version }}"
+module = "{{ .Consensus.Module }}"
 
 wal_file = "{{ js .Consensus.WalPath }}"
 
