@@ -73,10 +73,23 @@ func (genDoc *GenesisDoc) ValidateAndComplete() error {
 		return errors.Errorf("chain_id in genesis doc is too long (max: %d)", MaxChainIDLen)
 	}
 
-	if genDoc.ConsensusParams == nil {
-		genDoc.ConsensusParams = DefaultFridayConsensusParams()
-	} else if err := genDoc.ConsensusParams.Validate(); err != nil {
-		return err
+	switch genDoc.ConsensusModule {
+	case "friday":
+		if genDoc.ConsensusParams == nil {
+			genDoc.ConsensusParams = DefaultFridayConsensusParams()
+		} else if err := genDoc.ConsensusParams.Validate(); err != nil {
+			return err
+		}
+
+	case "tendermint":
+		if genDoc.ConsensusParams == nil {
+			genDoc.ConsensusParams = DefaultConsensusParams()
+		} else if err := genDoc.ConsensusParams.Validate(); err != nil {
+			return err
+		}
+
+	default:
+		return errors.Errorf("invalid consenssus module %s", genDoc.ConsensusModule)
 	}
 
 	for i, v := range genDoc.Validators {
@@ -95,12 +108,6 @@ func (genDoc *GenesisDoc) ValidateAndComplete() error {
 		genDoc.GenesisTime = tmtime.Now()
 	}
 
-	switch genDoc.ConsensusModule {
-	case "friday":
-	case "tendermint":
-	default:
-		return errors.Errorf("invalid consenssus module %s", genDoc.ConsensusModule)
-	}
 	return nil
 }
 
