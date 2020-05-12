@@ -100,9 +100,8 @@ func SaveState(db dbm.DB, state State) {
 }
 
 func saveState(db dbm.DB, state State, key []byte) {
-	// It means when running friday consensus
 	// TODO: refactor to package seperation
-	if state.ConsensusParams.Block.LenULB != 0 {
+	if state.Version.Consensus.Module == "friday" {
 		saveFridayState(db, state, key)
 		return
 	}

@@ -526,9 +526,8 @@ func updateState(
 	abciResponses *ABCIResponses,
 	validatorUpdates []*types.Validator,
 ) (State, error) {
-	// It means when running friday consensus
 	// TODO: refactor to package seperation
-	if state.ConsensusParams.Block.LenULB != 0 {
+	if state.Version.Consensus.Module == "friday" {
 		return updateFridayState(state, blockID, header, abciResponses, validatorUpdates)
 	}
 
