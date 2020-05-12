@@ -179,12 +179,7 @@ func (blockExec *BlockExecutor) ApplyBlock(state State, blockID types.BlockID, b
 	}
 
 	startTime := time.Now().UnixNano()
-	commitDistance := int64(1)
-	if state.ConsensusParams.Block.LenULB != 0 {
-		commitDistance = state.ConsensusParams.Block.LenULB
-	}
-
-	abciResponses, err := execBlockOnProxyApp(blockExec.logger, blockExec.proxyApp, block, blockExec.db, commitDistance)
+	abciResponses, err := execBlockOnProxyApp(blockExec.logger, blockExec.proxyApp, block, blockExec.db, 1)
 	endTime := time.Now().UnixNano()
 	blockExec.metrics.BlockProcessingTime.Observe(float64(endTime-startTime) / 1000000)
 	if err != nil {
@@ -255,12 +250,7 @@ func (blockExec *BlockExecutor) ApplyFridayBlock(state State, blockID types.Bloc
 	}
 
 	startTime := time.Now().UnixNano()
-	commitDistance := int64(1)
-	if state.ConsensusParams.Block.LenULB != 0 {
-		commitDistance = state.ConsensusParams.Block.LenULB
-	}
-
-	abciResponses, err := execBlockOnProxyApp(blockExec.logger, blockExec.proxyApp, block, blockExec.db, commitDistance)
+	abciResponses, err := execBlockOnProxyApp(blockExec.logger, blockExec.proxyApp, block, blockExec.db, state.ConsensusParams.Block.LenULB)
 	endTime := time.Now().UnixNano()
 	blockExec.metrics.BlockProcessingTime.Observe(float64(endTime-startTime) / 1000000)
 	if err != nil {
