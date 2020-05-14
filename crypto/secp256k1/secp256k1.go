@@ -8,9 +8,8 @@ import (
 	"io"
 	"math/big"
 
-	"golang.org/x/crypto/blake2b"
-
 	secp256k1 "github.com/btcsuite/btcd/btcec"
+	"golang.org/x/crypto/blake2b"
 
 	amino "github.com/tendermint/go-amino"
 

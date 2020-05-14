@@ -2,7 +2,7 @@ package crypto
 
 import (
 	"github.com/hdac-io/tendermint/crypto/tmhash"
-	cmn "github.com/hdac-io/tendermint/libs/common"
+	"github.com/hdac-io/tendermint/libs/bytes"
 )
 
 const (
@@ -13,7 +13,7 @@ const (
 // An address is a []byte, but hex-encoded even in JSON.
 // []byte leaves us the option to change the address length.
 // Use an alias so Unmarshal methods (with ptr receivers) are available too.
-type Address = cmn.HexBytes
+type Address = bytes.HexBytes
 
 func AddressHash(bz []byte) Address {
 	return Address(tmhash.SumTruncated(bz))

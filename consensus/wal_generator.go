@@ -11,23 +11,25 @@ import (
 
 	"github.com/pkg/errors"
 
+	db "github.com/tendermint/tm-db"
+
 	"github.com/hdac-io/tendermint/abci/example/kvstore"
 	cfg "github.com/hdac-io/tendermint/config"
-	cmn "github.com/hdac-io/tendermint/libs/common"
 	"github.com/hdac-io/tendermint/libs/log"
+	tmrand "github.com/hdac-io/tendermint/libs/rand"
 	"github.com/hdac-io/tendermint/mock"
 	"github.com/hdac-io/tendermint/privval"
 	"github.com/hdac-io/tendermint/proxy"
 	sm "github.com/hdac-io/tendermint/state"
 	"github.com/hdac-io/tendermint/store"
 	"github.com/hdac-io/tendermint/types"
-	db "github.com/tendermint/tm-db"
 )
 
 // WALGenerateNBlocks generates a consensus WAL. It does this by spinning up a
 // stripped down version of node (proxy app, event bus, consensus state) with a
 // persistent kvstore application and special consensus wal instance
-// (byteBufferWAL) and waits until numBlocks are created. If the node fails to produce given numBlocks, it returns an error.
+// (byteBufferWAL) and waits until numBlocks are created.
+// If the node fails to produce given numBlocks, it returns an error.
 func WALGenerateNBlocks(t *testing.T, wr io.Writer, numBlocks int) (err error) {
 	config := getConfig(t)
 
@@ -73,7 +75,7 @@ func WALGenerateNBlocks(t *testing.T, wr io.Writer, numBlocks int) (err error) {
 	mempool := mock.Mempool{}
 	evpool := sm.MockEvidencePool{}
 	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyApp.Consensus(), mempool, evpool)
-	consensusState := NewConsensusState(config.Consensus, state.Copy(), blockExec, blockStore, mempool, evpool)
+	consensusState := NewState(config.Consensus, state.Copy(), blockExec, blockStore, mempool, evpool)
 	consensusState.SetLogger(logger)
 	consensusState.SetEventBus(eventBus)
 	if privValidator != nil {
@@ -119,14 +121,14 @@ func WALWithNBlocks(t *testing.T, numBlocks int) (data []byte, err error) {
 func randPort() int {
 	// returns between base and base + spread
 	base, spread := 20000, 20000
-	return base + cmn.RandIntn(spread)
+	return base + tmrand.Intn(spread)
 }
 
 func makeAddrs() (string, string, string) {
 	start := randPort()
-	return fmt.Sprintf("tcp://0.0.0.0:%d", start),
-		fmt.Sprintf("tcp://0.0.0.0:%d", start+1),
-		fmt.Sprintf("tcp://0.0.0.0:%d", start+2)
+	return fmt.Sprintf("tcp://127.0.0.1:%d", start),
+		fmt.Sprintf("tcp://127.0.0.1:%d", start+1),
+		fmt.Sprintf("tcp://127.0.0.1:%d", start+2)
 }
 
 // getConfig returns a config for test cases
@@ -199,7 +201,9 @@ func (w *byteBufferWAL) WriteSync(m WALMessage) error {
 
 func (w *byteBufferWAL) FlushAndSync() error { return nil }
 
-func (w *byteBufferWAL) SearchForEndHeight(height int64, options *WALSearchOptions) (rd io.ReadCloser, found bool, err error) {
+func (w *byteBufferWAL) SearchForEndHeight(
+	height int64,
+	options *WALSearchOptions) (rd io.ReadCloser, found bool, err error) {
 	return nil, false, nil
 }
 

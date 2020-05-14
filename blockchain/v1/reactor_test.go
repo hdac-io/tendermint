@@ -10,6 +10,11 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	dbm "github.com/tendermint/tm-db"
+
+
 	abci "github.com/hdac-io/tendermint/abci/types"
 	cfg "github.com/hdac-io/tendermint/config"
 	"github.com/hdac-io/tendermint/libs/log"
@@ -20,7 +25,6 @@ import (
 	"github.com/hdac-io/tendermint/store"
 	"github.com/hdac-io/tendermint/types"
 	tmtime "github.com/hdac-io/tendermint/types/time"
-	dbm "github.com/tendermint/tm-db"
 )
 
 var config *cfg.Config
@@ -45,12 +49,20 @@ func randGenesisDoc(numValidators int, randPower bool, minPower int64) (*types.G
 	}, privValidators
 }
 
-func makeVote(header *types.Header, blockID types.BlockID, valset *types.ValidatorSet, privVal types.PrivValidator) *types.Vote {
-	addr := privVal.GetPubKey().Address()
-	idx, _ := valset.GetByAddress(addr)
+func makeVote(
+	t *testing.T,
+	header *types.Header,
+	blockID types.BlockID,
+	valset *types.ValidatorSet,
+	privVal types.PrivValidator) *types.Vote {
+
+	pubKey, err := privVal.GetPubKey()
+	require.NoError(t, err)
+
+	valIdx, _ := valset.GetByAddress(pubKey.Address())
 	vote := &types.Vote{
-		ValidatorAddress: addr,
-		ValidatorIndex:   idx,
+		ValidatorAddress: pubKey.Address(),
+		ValidatorIndex:   valIdx,
 		Height:           header.Height,
 		Round:            1,
 		Timestamp:        tmtime.Now(),
@@ -68,7 +80,12 @@ type BlockchainReactorPair struct {
 	conR *consensusReactorTest
 }
 
-func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals []types.PrivValidator, maxBlockHeight int64) *BlockchainReactor {
+func newBlockchainReactor(
+	t *testing.T,
+	logger log.Logger,
+	genDoc *types.GenesisDoc,
+	privVals []types.PrivValidator,
+	maxBlockHeight int64) *BlockchainReactor {
 	if len(privVals) != 1 {
 		panic("only support one validator")
 	}
@@ -101,13 +118,13 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 
 	// let's add some blocks in
 	for blockHeight := int64(1); blockHeight <= maxBlockHeight; blockHeight++ {
-		lastCommit := types.NewCommit(types.BlockID{}, nil)
+		lastCommit := types.NewCommit(blockHeight-1, 1, types.BlockID{}, nil)
 		if blockHeight > 1 {
 			lastBlockMeta := blockStore.LoadBlockMeta(blockHeight - 1)
 			lastBlock := blockStore.LoadBlock(blockHeight - 1)
 
-			vote := makeVote(&lastBlock.Header, lastBlockMeta.BlockID, state.Validators, privVals[0]).CommitSig()
-			lastCommit = types.NewCommit(lastBlockMeta.BlockID, []*types.CommitSig{vote})
+			vote := makeVote(t, &lastBlock.Header, lastBlockMeta.BlockID, state.Validators, privVals[0])
+			lastCommit = types.NewCommit(vote.Height, vote.Round, lastBlockMeta.BlockID, []types.CommitSig{vote.CommitSig()})
 		}
 
 		thisBlock := makeBlock(blockHeight, state, lastCommit)
@@ -115,7 +132,7 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 		thisParts := thisBlock.MakePartSet(types.BlockPartSizeBytes)
 		blockID := types.BlockID{Hash: thisBlock.Hash(), PartsHeader: thisParts.Header()}
 
-		state, err = blockExec.ApplyBlock(state, blockID, thisBlock)
+		state, _, err = blockExec.ApplyBlock(state, blockID, thisBlock)
 		if err != nil {
 			panic(errors.Wrap(err, "error apply block"))
 		}
@@ -129,13 +146,18 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 	return bcReactor
 }
 
-func newBlockchainReactorPair(logger log.Logger, genDoc *types.GenesisDoc, privVals []types.PrivValidator, maxBlockHeight int64) BlockchainReactorPair {
+func newBlockchainReactorPair(
+	t *testing.T,
+	logger log.Logger,
+	genDoc *types.GenesisDoc,
+	privVals []types.PrivValidator,
+	maxBlockHeight int64) BlockchainReactorPair {
 
 	consensusReactor := &consensusReactorTest{}
 	consensusReactor.BaseReactor = *p2p.NewBaseReactor("Consensus reactor", consensusReactor)
 
 	return BlockchainReactorPair{
-		newBlockchainReactor(logger, genDoc, privVals, maxBlockHeight),
+		newBlockchainReactor(t, logger, genDoc, privVals, maxBlockHeight),
 		consensusReactor}
 }
 
@@ -145,7 +167,7 @@ type consensusReactorTest struct {
 	mtx                 sync.Mutex
 }
 
-func (conR *consensusReactorTest) SwitchToConsensus(state sm.State, blocksSynced int) {
+func (conR *consensusReactorTest) SwitchToConsensus(state sm.State, blocksSynced uint64) {
 	conR.mtx.Lock()
 	defer conR.mtx.Unlock()
 	conR.switchedToConsensus = true
@@ -162,8 +184,8 @@ func TestFastSyncNoBlockResponse(t *testing.T) {
 	reactorPairs := make([]BlockchainReactorPair, 2)
 
 	logger := log.TestingLogger()
-	reactorPairs[0] = newBlockchainReactorPair(logger, genDoc, privVals, maxBlockHeight)
-	reactorPairs[1] = newBlockchainReactorPair(logger, genDoc, privVals, 0)
+	reactorPairs[0] = newBlockchainReactorPair(t, logger, genDoc, privVals, maxBlockHeight)
+	reactorPairs[1] = newBlockchainReactorPair(t, logger, genDoc, privVals, 0)
 
 	p2p.MakeConnectedSwitches(config.P2P, 2, func(i int, s *p2p.Switch) *p2p.Switch {
 		s.AddReactor("BLOCKCHAIN", reactorPairs[i].bcR)
@@ -227,7 +249,7 @@ func TestFastSyncBadBlockStopsPeer(t *testing.T) {
 	defer os.RemoveAll(config.RootDir)
 	genDoc, privVals := randGenesisDoc(1, false, 30)
 
-	otherChain := newBlockchainReactorPair(log.TestingLogger(), genDoc, privVals, maxBlockHeight)
+	otherChain := newBlockchainReactorPair(t, log.TestingLogger(), genDoc, privVals, maxBlockHeight)
 	defer func() {
 		_ = otherChain.bcR.Stop()
 		_ = otherChain.conR.Stop()
@@ -242,7 +264,7 @@ func TestFastSyncBadBlockStopsPeer(t *testing.T) {
 		if i == 0 {
 			height = maxBlockHeight
 		}
-		reactorPairs[i] = newBlockchainReactorPair(logger[i], genDoc, privVals, height)
+		reactorPairs[i] = newBlockchainReactorPair(t, logger[i], genDoc, privVals, height)
 	}
 
 	switches := p2p.MakeConnectedSwitches(config.P2P, numNodes, func(i int, s *p2p.Switch) *p2p.Switch {
@@ -284,7 +306,7 @@ outerFor:
 	reactorPairs[numNodes-1].bcR.store = otherChain.bcR.store
 
 	lastLogger := log.TestingLogger()
-	lastReactorPair := newBlockchainReactorPair(lastLogger, genDoc, privVals, 0)
+	lastReactorPair := newBlockchainReactorPair(t, lastLogger, genDoc, privVals, 0)
 	reactorPairs = append(reactorPairs, lastReactorPair)
 
 	switches = append(switches, p2p.MakeConnectedSwitches(config.P2P, 1, func(i int, s *p2p.Switch) *p2p.Switch {

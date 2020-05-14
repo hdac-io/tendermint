@@ -15,7 +15,7 @@ import (
 
 	cfg "github.com/hdac-io/tendermint/config"
 	"github.com/hdac-io/tendermint/libs/cli"
-	cmn "github.com/hdac-io/tendermint/libs/common"
+	tmos "github.com/hdac-io/tendermint/libs/os"
 )
 
 var (
@@ -140,7 +140,7 @@ func TestRootConfig(t *testing.T) {
 
 		// XXX: path must match cfg.defaultConfigPath
 		configFilePath := filepath.Join(defaultRoot, "config")
-		err := cmn.EnsureDir(configFilePath, 0700)
+		err := tmos.EnsureDir(configFilePath, 0700)
 		require.Nil(t, err)
 
 		// write the non-defaults to a different path

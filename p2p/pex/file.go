@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	cmn "github.com/hdac-io/tendermint/libs/common"
+	"github.com/hdac-io/tendermint/libs/tempfile"
 )
 
 /* Loading & Saving */
@@ -35,7 +35,7 @@ func (a *addrBook) saveToFile(filePath string) {
 		a.Logger.Error("Failed to save AddrBook to file", "err", err)
 		return
 	}
-	err = cmn.WriteFileAtomic(filePath, jsonBytes, 0644)
+	err = tempfile.WriteFileAtomic(filePath, jsonBytes, 0644)
 	if err != nil {
 		a.Logger.Error("Failed to save AddrBook to file", "file", filePath, "err", err)
 	}

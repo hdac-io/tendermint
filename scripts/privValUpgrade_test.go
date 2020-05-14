@@ -8,8 +8,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/hdac-io/tendermint/privval"
 )
+
+const lastSignBytes = "750802110500000000000000220B08B398F3E00510F48DA6402A480A20FC25" +
+	"8973076512999C3E6839A22E9FBDB1B77CF993E8A9955412A41A59D4CAD312240A20C971B286ACB8AA" +
+	"A6FCA0365EB0A660B189EDC08B46B5AF2995DEFA51A28D215B10013211746573742D636861696E2D533245415533"
 
 const oldPrivvalContent = `{
   "address": "1D8089FAFDFAE4A637F3D616E17B92905FA2D91D",
@@ -21,7 +26,7 @@ const oldPrivvalContent = `{
   "last_round": "0",
   "last_step": 3,
   "last_signature": "CTr7b9ZQlrJJf+12rPl5t/YSCUc/KqV7jQogCfFJA24e7hof69X6OMT7eFLVQHyodPjD/QTA298XHV5ejxInDQ==",
-  "last_signbytes": "750802110500000000000000220B08B398F3E00510F48DA6402A480A20FC258973076512999C3E6839A22E9FBDB1B77CF993E8A9955412A41A59D4CAD312240A20C971B286ACB8AAA6FCA0365EB0A660B189EDC08B46B5AF2995DEFA51A28D215B10013211746573742D636861696E2D533245415533",
+  "last_signbytes": "` + lastSignBytes + `",
   "priv_key": {
     "type": "tendermint/PrivKeyEd25519",
     "value": "7MwvTGEWWjsYwjn2IpRb+GYsWi9nnFsw8jPLLY1UtP6vdiDYCENnvjkI1Olq+wZT6ZFnxalFeqgm7KqM3yYmrQ=="
@@ -96,7 +101,9 @@ func TestLoadAndUpgrade(t *testing.T) {
 					assert.Equal(t, oldPV.Address, upgradedPV.Key.Address)
 					assert.Equal(t, oldPV.Address, upgradedPV.GetAddress())
 					assert.Equal(t, oldPV.PubKey, upgradedPV.Key.PubKey)
-					assert.Equal(t, oldPV.PubKey, upgradedPV.GetPubKey())
+					upv, err := upgradedPV.GetPubKey()
+					require.NoError(t, err)
+					assert.Equal(t, oldPV.PubKey, upv)
 					assert.Equal(t, oldPV.PrivKey, upgradedPV.Key.PrivKey)
 
 					assert.Equal(t, oldPV.LastHeight, upgradedPV.LastSignState.Height)

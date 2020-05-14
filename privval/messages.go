@@ -2,6 +2,7 @@ package privval
 
 import (
 	amino "github.com/tendermint/go-amino"
+
 	"github.com/hdac-io/tendermint/crypto"
 	"github.com/hdac-io/tendermint/types"
 )

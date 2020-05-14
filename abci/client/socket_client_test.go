@@ -12,11 +12,16 @@ import (
 	abcicli "github.com/hdac-io/tendermint/abci/client"
 	"github.com/hdac-io/tendermint/abci/server"
 	"github.com/hdac-io/tendermint/abci/types"
-	cmn "github.com/hdac-io/tendermint/libs/common"
+	tmrand "github.com/hdac-io/tendermint/libs/rand"
+	"github.com/hdac-io/tendermint/libs/service"
 )
 
+type errorStopper interface {
+	StopForError(error)
+}
+
 func TestSocketClientStopForErrorDeadlock(t *testing.T) {
-	c := abcicli.NewSocketClient(":80", false)
+	c := abcicli.NewSocketClient(":80", false).(errorStopper)
 	err := errors.New("foo-tendermint")
 
 	// See Issue https://github.com/tendermint/abci/issues/114
@@ -94,9 +99,9 @@ func TestHangingSyncCalls(t *testing.T) {
 }
 
 func setupClientServer(t *testing.T, app types.Application) (
-	cmn.Service, abcicli.Client) {
+	service.Service, abcicli.Client) {
 	// some port between 20k and 30k
-	port := 20000 + cmn.RandInt32()%10000
+	port := 20000 + tmrand.Int32()%10000
 	addr := fmt.Sprintf("localhost:%d", port)
 
 	s, err := server.NewServer(addr, "socket", app)

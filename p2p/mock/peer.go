@@ -4,13 +4,13 @@ import (
 	"net"
 
 	"github.com/hdac-io/tendermint/crypto/bls"
-	cmn "github.com/hdac-io/tendermint/libs/common"
+	"github.com/hdac-io/tendermint/libs/service"
 	"github.com/hdac-io/tendermint/p2p"
 	"github.com/hdac-io/tendermint/p2p/conn"
 )
 
 type Peer struct {
-	*cmn.BaseService
+	*service.BaseService
 	ip                   net.IP
 	id                   p2p.ID
 	addr                 *p2p.NetAddress
@@ -35,7 +35,7 @@ func NewPeer(ip net.IP) *Peer {
 		addr: netAddr,
 		kv:   make(map[string]interface{}),
 	}
-	mp.BaseService = cmn.NewBaseService(nil, "MockPeer", mp)
+	mp.BaseService = service.NewBaseService(nil, "MockPeer", mp)
 	mp.Start()
 	return mp
 }
@@ -45,8 +45,8 @@ func (mp *Peer) TrySend(chID byte, msgBytes []byte) bool { return true }
 func (mp *Peer) Send(chID byte, msgBytes []byte) bool    { return true }
 func (mp *Peer) NodeInfo() p2p.NodeInfo {
 	return p2p.DefaultNodeInfo{
-		ID_:        mp.addr.ID,
-		ListenAddr: mp.addr.DialString(),
+		DefaultNodeID: mp.addr.ID,
+		ListenAddr:    mp.addr.DialString(),
 	}
 }
 func (mp *Peer) Status() conn.ConnectionStatus { return conn.ConnectionStatus{} }

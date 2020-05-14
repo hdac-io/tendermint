@@ -2,15 +2,15 @@ package evidence
 
 import (
 	amino "github.com/tendermint/go-amino"
-	cryptoAmino "github.com/hdac-io/tendermint/crypto/encoding/amino"
+	cryptoamino "github.com/hdac-io/tendermint/crypto/encoding/amino"
 	"github.com/hdac-io/tendermint/types"
 )
 
 var cdc = amino.NewCodec()
 
 func init() {
-	RegisterEvidenceMessages(cdc)
-	cryptoAmino.RegisterAmino(cdc)
+	RegisterMessages(cdc)
+	cryptoamino.RegisterAmino(cdc)
 	types.RegisterEvidences(cdc)
 }
 

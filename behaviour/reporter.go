@@ -19,7 +19,7 @@ type SwitchReporter struct {
 }
 
 // NewSwitchReporter return a new SwitchReporter instance which wraps the Switch.
-func NewSwitcReporter(sw *p2p.Switch) *SwitchReporter {
+func NewSwitchReporter(sw *p2p.Switch) *SwitchReporter {
 	return &SwitchReporter{
 		sw: sw,
 	}
@@ -63,10 +63,12 @@ func NewMockReporter() *MockReporter {
 }
 
 // Report stores the PeerBehaviour produced by the peer identified by peerID.
-func (mpbr *MockReporter) Report(behaviour PeerBehaviour) {
+func (mpbr *MockReporter) Report(behaviour PeerBehaviour) error {
 	mpbr.mtx.Lock()
 	defer mpbr.mtx.Unlock()
 	mpbr.pb[behaviour.peerID] = append(mpbr.pb[behaviour.peerID], behaviour)
+
+	return nil
 }
 
 // GetBehaviours returns all behaviours reported on the peer identified by peerID.
@@ -78,7 +80,7 @@ func (mpbr *MockReporter) GetBehaviours(peerID p2p.ID) []PeerBehaviour {
 		copy(result, items)
 
 		return result
-	} else {
-		return []PeerBehaviour{}
 	}
+
+	return []PeerBehaviour{}
 }

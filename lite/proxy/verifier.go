@@ -3,13 +3,20 @@ package proxy
 import (
 	"github.com/pkg/errors"
 
+	dbm "github.com/tendermint/tm-db"
+
 	log "github.com/hdac-io/tendermint/libs/log"
 	"github.com/hdac-io/tendermint/lite"
 	lclient "github.com/hdac-io/tendermint/lite/client"
-	dbm "github.com/tendermint/tm-db"
 )
 
-func NewVerifier(chainID, rootDir string, client lclient.SignStatusClient, logger log.Logger, cacheSize int) (*lite.DynamicVerifier, error) {
+func NewVerifier(
+	chainID,
+	rootDir string,
+	client lclient.SignStatusClient,
+	logger log.Logger,
+	cacheSize int,
+) (*lite.DynamicVerifier, error) {
 
 	logger = logger.With("module", "lite/proxy")
 	logger.Info("lite/proxy/NewVerifier()...", "chainID", chainID, "rootDir", rootDir, "client", client)

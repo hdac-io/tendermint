@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	cmn "github.com/hdac-io/tendermint/libs/common"
 	"github.com/hdac-io/tendermint/libs/log"
+	"github.com/hdac-io/tendermint/libs/service"
 
 	abcicli "github.com/hdac-io/tendermint/abci/client"
 	"github.com/hdac-io/tendermint/abci/example/code"
@@ -30,6 +30,11 @@ func testKVStore(t *testing.T, app types.Application, tx []byte, key, value stri
 	// repeating tx doesn't raise error
 	ar = app.DeliverTx(req)
 	require.False(t, ar.IsErr(), ar)
+	// commit
+	app.Commit()
+
+	info := app.Info(types.RequestInfo{})
+	require.NotZero(t, info.LastBlockHeight)
 
 	// make sure query is fine
 	resQuery := app.Query(types.RequestQuery{
@@ -37,7 +42,9 @@ func testKVStore(t *testing.T, app types.Application, tx []byte, key, value stri
 		Data: []byte(key),
 	})
 	require.Equal(t, code.CodeTypeOK, resQuery.Code)
+	require.Equal(t, key, string(resQuery.Key))
 	require.Equal(t, value, string(resQuery.Value))
+	require.EqualValues(t, info.LastBlockHeight, resQuery.Height)
 
 	// make sure proof is fine
 	resQuery = app.Query(types.RequestQuery{
@@ -46,11 +53,13 @@ func testKVStore(t *testing.T, app types.Application, tx []byte, key, value stri
 		Prove: true,
 	})
 	require.EqualValues(t, code.CodeTypeOK, resQuery.Code)
+	require.Equal(t, key, string(resQuery.Key))
 	require.Equal(t, value, string(resQuery.Value))
+	require.EqualValues(t, info.LastBlockHeight, resQuery.Height)
 }
 
 func TestKVStoreKV(t *testing.T) {
-	kvstore := NewKVStoreApplication()
+	kvstore := NewApplication()
 	key := testKey
 	value := key
 	tx := []byte(key)
@@ -175,7 +184,12 @@ func TestValUpdates(t *testing.T) {
 
 }
 
-func makeApplyBlock(t *testing.T, kvstore types.Application, heightInt int, diff []types.ValidatorUpdate, txs ...[]byte) {
+func makeApplyBlock(
+	t *testing.T,
+	kvstore types.Application,
+	heightInt int,
+	diff []types.ValidatorUpdate,
+	txs ...[]byte) {
 	// make and apply block
 	height := int64(heightInt)
 	hash := []byte("foo")
@@ -212,7 +226,7 @@ func valsEqual(t *testing.T, vals1, vals2 []types.ValidatorUpdate) {
 	}
 }
 
-func makeSocketClientServer(app types.Application, name string) (abcicli.Client, cmn.Service, error) {
+func makeSocketClientServer(app types.Application, name string) (abcicli.Client, service.Service, error) {
 	// Start the listener
 	socket := fmt.Sprintf("unix://%s.sock", name)
 	logger := log.TestingLogger()
@@ -234,7 +248,7 @@ func makeSocketClientServer(app types.Application, name string) (abcicli.Client,
 	return client, server, nil
 }
 
-func makeGRPCClientServer(app types.Application, name string) (abcicli.Client, cmn.Service, error) {
+func makeGRPCClientServer(app types.Application, name string) (abcicli.Client, service.Service, error) {
 	// Start the listener
 	socket := fmt.Sprintf("unix://%s.sock", name)
 	logger := log.TestingLogger()
@@ -257,7 +271,7 @@ func makeGRPCClientServer(app types.Application, name string) (abcicli.Client, c
 
 func TestClientServer(t *testing.T) {
 	// set up socket app
-	kvstore := NewKVStoreApplication()
+	kvstore := NewApplication()
 	client, server, err := makeSocketClientServer(kvstore, "kvstore-socket")
 	require.Nil(t, err)
 	defer server.Stop()
@@ -266,7 +280,7 @@ func TestClientServer(t *testing.T) {
 	runClientTests(t, client)
 
 	// set up grpc app
-	kvstore = NewKVStoreApplication()
+	kvstore = NewApplication()
 	gclient, gserver, err := makeGRPCClientServer(kvstore, "kvstore-grpc")
 	require.Nil(t, err)
 	defer gserver.Stop()
@@ -295,6 +309,13 @@ func testClient(t *testing.T, app abcicli.Client, tx []byte, key, value string) 
 	ar, err = app.DeliverTxSync(types.RequestDeliverTx{Tx: tx})
 	require.NoError(t, err)
 	require.False(t, ar.IsErr(), ar)
+	// commit
+	_, err = app.CommitSync()
+	require.NoError(t, err)
+
+	info, err := app.InfoSync(types.RequestInfo{})
+	require.NoError(t, err)
+	require.NotZero(t, info.LastBlockHeight)
 
 	// make sure query is fine
 	resQuery, err := app.QuerySync(types.RequestQuery{
@@ -303,7 +324,9 @@ func testClient(t *testing.T, app abcicli.Client, tx []byte, key, value string) 
 	})
 	require.Nil(t, err)
 	require.Equal(t, code.CodeTypeOK, resQuery.Code)
+	require.Equal(t, key, string(resQuery.Key))
 	require.Equal(t, value, string(resQuery.Value))
+	require.EqualValues(t, info.LastBlockHeight, resQuery.Height)
 
 	// make sure proof is fine
 	resQuery, err = app.QuerySync(types.RequestQuery{
@@ -313,5 +336,7 @@ func testClient(t *testing.T, app abcicli.Client, tx []byte, key, value string) 
 	})
 	require.Nil(t, err)
 	require.Equal(t, code.CodeTypeOK, resQuery.Code)
+	require.Equal(t, key, string(resQuery.Key))
 	require.Equal(t, value, string(resQuery.Value))
+	require.EqualValues(t, info.LastBlockHeight, resQuery.Height)
 }

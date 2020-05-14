@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/hdac-io/tendermint/p2p"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestScheduleInit(t *testing.T) {
