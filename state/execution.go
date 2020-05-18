@@ -173,6 +173,9 @@ func (blockExec *BlockExecutor) UnreserveBlock(state State, block *types.Block) 
 // from outside this package to process and commit an entire block.
 // It takes a blockID to avoid recomputing the parts hash.
 func (blockExec *BlockExecutor) ApplyBlock(state State, blockID types.BlockID, block *types.Block) (State, error) {
+	if state.Version.Consensus.Module == "friday" {
+		return blockExec.ApplyFridayBlock(state, blockID, block)
+	}
 
 	if err := blockExec.ValidateBlock(state, block); err != nil {
 		return state, ErrInvalidBlock(err)
