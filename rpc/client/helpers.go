@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+
 	"github.com/hdac-io/tendermint/types"
 )
 

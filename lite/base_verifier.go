@@ -5,7 +5,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	cmn "github.com/hdac-io/tendermint/libs/common"
 	lerr "github.com/hdac-io/tendermint/lite/errors"
 	"github.com/hdac-io/tendermint/types"
 )
@@ -46,13 +45,13 @@ func (bv *BaseVerifier) Verify(signedHeader types.SignedHeader) error {
 
 	// We can't verify commits for a different chain.
 	if signedHeader.ChainID != bv.chainID {
-		return cmn.NewError("BaseVerifier chainID is %v, cannot verify chainID %v",
+		return errors.Errorf("BaseVerifier chainID is %v, cannot verify chainID %v",
 			bv.chainID, signedHeader.ChainID)
 	}
 
 	// We can't verify commits older than bv.height.
 	if signedHeader.Height < bv.height {
-		return cmn.NewError("BaseVerifier height is %v, cannot verify height %v",
+		return errors.Errorf("BaseVerifier height is %v, cannot verify height %v",
 			bv.height, signedHeader.Height)
 	}
 

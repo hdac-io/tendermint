@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	auto "github.com/hdac-io/tendermint/libs/autofile"
-	cmn "github.com/hdac-io/tendermint/libs/common"
+	tmos "github.com/hdac-io/tendermint/libs/os"
 )
 
 const Version = "0.0.1"
@@ -41,7 +41,7 @@ func (fmtLogger) Info(msg string, keyvals ...interface{}) {
 
 func main() {
 	// Stop upon receiving SIGTERM or CTRL-C.
-	cmn.TrapSignal(fmtLogger{}, func() {
+	tmos.TrapSignal(fmtLogger{}, func() {
 		fmt.Println("logjack shutting down")
 	})
 

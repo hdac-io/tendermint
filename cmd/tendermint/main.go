@@ -4,11 +4,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/hdac-io/tendermint/libs/cli"
-
 	cmd "github.com/hdac-io/tendermint/cmd/tendermint/commands"
+	"github.com/hdac-io/tendermint/cmd/tendermint/commands/debug"
 	cfg "github.com/hdac-io/tendermint/config"
 	nm "github.com/hdac-io/tendermint/node"
+	"github.com/hdac-io/tendermint/libs/cli"
 )
 
 func main() {
@@ -26,7 +26,10 @@ func main() {
 		cmd.TestnetFilesCmd,
 		cmd.ShowNodeIDCmd,
 		cmd.GenNodeKeyCmd,
-		cmd.VersionCmd)
+		cmd.VersionCmd,
+		debug.DebugCmd,
+		cli.NewCompletionCmd(rootCmd, true),
+	)
 
 	// NOTE:
 	// Users wishing to:

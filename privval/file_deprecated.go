@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/hdac-io/tendermint/crypto"
-	cmn "github.com/hdac-io/tendermint/libs/common"
+	"github.com/hdac-io/tendermint/libs/bytes"
 	"github.com/hdac-io/tendermint/types"
 )
 
@@ -18,7 +18,7 @@ type OldFilePV struct {
 	LastRound     int            `json:"last_round"`
 	LastStep      int8           `json:"last_step"`
 	LastSignature []byte         `json:"last_signature,omitempty"`
-	LastSignBytes cmn.HexBytes   `json:"last_signbytes,omitempty"`
+	LastSignBytes bytes.HexBytes `json:"last_signbytes,omitempty"`
 	PrivKey       crypto.PrivKey `json:"priv_key"`
 
 	filePath string

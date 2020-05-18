@@ -6,12 +6,12 @@ import (
 	"log"
 
 	"github.com/hdac-io/tendermint/abci/types"
-	cmn "github.com/hdac-io/tendermint/libs/common"
+	tmnet "github.com/hdac-io/tendermint/libs/net"
 )
 
 func main() {
 
-	conn, err := cmn.Connect("unix://test.sock")
+	conn, err := tmnet.Connect("unix://test.sock")
 	if err != nil {
 		log.Fatal(err.Error())
 	}

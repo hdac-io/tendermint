@@ -3,7 +3,7 @@ package types
 import (
 	abci "github.com/hdac-io/tendermint/abci/types"
 	"github.com/hdac-io/tendermint/crypto/merkle"
-	cmn "github.com/hdac-io/tendermint/libs/common"
+	"github.com/hdac-io/tendermint/libs/bytes"
 )
 
 //-----------------------------------------------------------------------------
@@ -12,8 +12,8 @@ import (
 // TODO: add tags and other fields
 // https://github.com/tendermint/tendermint/issues/1007
 type ABCIResult struct {
-	Code uint32       `json:"code"`
-	Data cmn.HexBytes `json:"data"`
+	Code uint32         `json:"code"`
+	Data bytes.HexBytes `json:"data"`
 }
 
 // Bytes returns the amino encoded ABCIResult

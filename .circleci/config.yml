@@ -11,7 +11,7 @@ executors:
     machine: true
   docs:
     docker:
-      - image: tendermintdev/jq_curl
+      - image: tendermintdev/docker-website-deployment
     environment:
       AWS_REGION: us-east-1
 
@@ -72,26 +72,6 @@ jobs:
           root: "/tmp/bin"
           paths:
             - "."
-
-  test_abci_apps:
-    executor: golang
-    steps:
-      - run_test:
-          script_path: abci/tests/test_app/test.sh
-
-  # if this test fails, fix it and update the docs at:
-  # https://github.com/tendermint/tendermint/blob/develop/docs/abci-cli.md
-  test_abci_cli:
-    executor: golang
-    steps:
-      - run_test:
-          script_path: abci/tests/test_cli/test.sh
-
-  test_apps:
-    executor: golang
-    steps:
-      - run_test:
-          script_path: test/app/test.sh
 
   test_persistence:
     executor: golang
@@ -155,11 +135,15 @@ jobs:
       GOPATH: /home/circleci/.go_workspace
     machine:
       image: circleci/classic:latest
+    parameters:
+      ipv:
+        type: integer
+        default: 4
     steps:
       - checkout
       - run: mkdir -p $GOPATH/src/github.com/tendermint
       - run: ln -sf /home/circleci/project $GOPATH/src/github.com/hdac-io/tendermint
-      - run: bash test/p2p/circleci.sh
+      - run: bash test/p2p/circleci.sh << parameters.ipv >>
       - store_artifacts:
           path: /home/circleci/project/test/p2p/logs
 
@@ -191,30 +175,13 @@ jobs:
   deploy_docs:
     executor: docs
     steps:
-      - restore_cache:
-          name: "Restore source code cache"
-          keys:
-            - go-src-v1-{{ .Revision }}
       - checkout
       - run:
-          name: Trigger website build
-          command: |
-            curl --silent \
-                --show-error \
-                -X POST \
-                --header "Content-Type: application/json" \
-                -d "{\"branch\": \"$CIRCLE_BRANCH\"}" \
-                "https://circleci.com/api/v1.1/project/github/$CIRCLE_PROJECT_USERNAME/$WEBSITE_REPO_NAME/build?circle-token=$TENDERBOT_API_TOKEN" > response.json
-
-            RESULT=`jq -r '.status' response.json`
-            MESSAGE=`jq -r '.message' response.json`
-
-            if [[ ${RESULT} == "null" ]] || [[ ${RESULT} -ne "200" ]]; then
-                echo "CircleCI API call failed: $MESSAGE"
-                exit 1
-            else
-                echo "Website build started"
-            fi
+          name: "Build docs"
+          command: make build-docs
+      - run:
+          name: "Sync to S3"
+          command: make sync-docs
 
   prepare_build:
     executor: golang
@@ -314,10 +281,6 @@ jobs:
     machine:
       image: ubuntu-1604:201903-01
     steps:
-      - restore_cache:
-          name: "Restore source code cache"
-          keys:
-            - go-src-v1-{{ .Revision }}
       - checkout
       - attach_workspace:
           at: /tmp/workspace
@@ -337,10 +300,6 @@ jobs:
     steps:
       - attach_workspace:
           at: /tmp/workspace
-      - restore_cache:
-          name: "Restore source code cache"
-          keys:
-            - go-src-v1-{{ .Revision }}
       - checkout
       - setup_remote_docker:
           docker_layer_caching: true
@@ -348,6 +307,7 @@ jobs:
           name: Build tendermint
           no_output_timeout: 20m
           command: |
+            sudo apt-get update
             sudo apt-get install -y ruby
             bash -x ./scripts/gitian-build.sh all
             for os in darwin linux windows; do
@@ -364,54 +324,52 @@ jobs:
       - store_artifacts:
           path: /go/src/github.com/hdac-io/tendermint/tendermint-*.tar.gz
 
-  # Test RPC implementation against the swagger documented specs
-  contract_tests:
-    working_directory: /home/circleci/.go_workspace/src/github.com/hdac-io/tendermint
-    machine:
-      image: circleci/classic:latest
-    environment:
-      GOBIN: /home/circleci/.go_workspace/bin
-      GOPATH: /home/circleci/.go_workspace/
-      GOOS: linux
-      GOARCH: amd64
-    parallelism: 1
-    steps:
-      - checkout
-      - run:
-          name: Test RPC endpoints against swagger documentation
-          command: |
-            set -x
-            export PATH=~/.local/bin:$PATH
-
-            # install node and dredd
-            ./scripts/get_nodejs.sh
-
-            # build the binaries with a proper version of Go
-            docker run --rm -v "$PWD":/go/src/github.com/hdac-io/tendermint -w /go/src/github.com/hdac-io/tendermint golang make build-linux build-contract-tests-hooks
-
-            # This docker image works with go 1.7, we can install here the hook handler that contract-tests is going to use
-            go get github.com/snikch/goodman/cmd/goodman
-            make contract-tests
+  # # Test RPC implementation against the swagger documented specs
+  # contract_tests:
+  #   working_directory: /home/circleci/.go_workspace/src/github.com/tendermint/tendermint
+  #   machine:
+  #     image: circleci/classic:latest
+  #   environment:
+  #     GOBIN: /home/circleci/.go_workspace/bin
+  #     GOPATH: /home/circleci/.go_workspace/
+  #     GOOS: linux
+  #     GOARCH: amd64
+  #   parallelism: 1
+  #   steps:
+  #     - checkout
+  #     - run:
+  #         name: Test RPC endpoints against swagger documentation
+  #         command: |
+  #           set -x
+  #           export PATH=~/.local/bin:$PATH
+  #           # install node and dredd
+  #           ./scripts/get_nodejs.sh
+  #           # build the binaries with a proper version of Go
+  #           docker run --rm -v "$PWD":/go/src/github.com/tendermint/tendermint -w /go/src/github.com/tendermint/tendermint golang make build-linux build-contract-tests-hooks
+  #           # This docker image works with go 1.7, we can install here the hook handler that contract-tests is going to use
+  #           go get github.com/snikch/goodman/cmd/goodman
+  #           make contract-tests
 
 workflows:
   version: 2
   test-suite:
     jobs:
       - deploy_docs:
+          context: tendermint-docs
           filters:
             branches:
               only:
                 - master
+            tags:
+              only:
+                - /^v.*/
+      - deploy_docs:
+          context: tendermint-docs-staging
+          filters:
+            branches:
+              only:
+                - docs-staging
       - setup_dependencies
-      - test_abci_apps:
-          requires:
-            - setup_dependencies
-      - test_abci_cli:
-          requires:
-            - setup_dependencies
-      - test_apps:
-          requires:
-            - setup_dependencies
       - test_cover:
           requires:
             - setup_dependencies
@@ -422,6 +380,9 @@ workflows:
           requires:
             - setup_dependencies
       - test_p2p
+      - test_p2p:
+          name: test_p2p_ipv6
+          ipv: 6
       - upload_coverage:
           requires:
             - test_cover
@@ -431,9 +392,9 @@ workflows:
               only:
                 - master
                 - /v[0-9]+\.[0-9]+/
-      - contract_tests:
-          requires:
-            - setup_dependencies
+      # - contract_tests:
+      #     requires:
+      #       - setup_dependencies
 
   release:
     jobs:
@@ -457,3 +418,4 @@ workflows:
             branches:
               only:
                 - /v[0-9]+\.[0-9]+/
+                - master

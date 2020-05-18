@@ -7,15 +7,23 @@ import (
 	"github.com/hdac-io/tendermint/types"
 )
 
-func DefaultValidationRequestHandler(privVal types.PrivValidator, req SignerMessage, chainID string) (SignerMessage, error) {
+func DefaultValidationRequestHandler(
+	privVal types.PrivValidator,
+	req SignerMessage,
+	chainID string,
+) (SignerMessage, error) {
 	var res SignerMessage
 	var err error
 
 	switch r := req.(type) {
 	case *PubKeyRequest:
-		var p crypto.PubKey
-		p = privVal.GetPubKey()
-		res = &PubKeyResponse{p, nil}
+		var pubKey crypto.PubKey
+		pubKey, err = privVal.GetPubKey()
+		if err != nil {
+			res = &PubKeyResponse{nil, &RemoteSignerError{0, err.Error()}}
+		} else {
+			res = &PubKeyResponse{pubKey, nil}
+		}
 
 	case *SignVoteRequest:
 		err = privVal.SignVote(chainID, r.Vote)

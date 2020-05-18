@@ -3,11 +3,13 @@ package commands
 import (
 	"fmt"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	cfg "github.com/hdac-io/tendermint/config"
-	cmn "github.com/hdac-io/tendermint/libs/common"
 	"github.com/hdac-io/tendermint/p2p"
 	"github.com/hdac-io/tendermint/privval"
+	tmos "github.com/hdac-io/tendermint/libs/os"
+	tmrand "github.com/hdac-io/tendermint/libs/rand"
 	"github.com/hdac-io/tendermint/types"
 	tmtime "github.com/hdac-io/tendermint/types/time"
 )
@@ -28,7 +30,7 @@ func initFilesWithConfig(config *cfg.Config) error {
 	privValKeyFile := config.PrivValidatorKeyFile()
 	privValStateFile := config.PrivValidatorStateFile()
 	var pv *privval.FilePV
-	if cmn.FileExists(privValKeyFile) {
+	if tmos.FileExists(privValKeyFile) {
 		pv = privval.LoadFilePV(privValKeyFile, privValStateFile)
 		logger.Info("Found private validator", "keyFile", privValKeyFile,
 			"stateFile", privValStateFile)
@@ -40,7 +42,7 @@ func initFilesWithConfig(config *cfg.Config) error {
 	}
 
 	nodeKeyFile := config.NodeKeyFile()
-	if cmn.FileExists(nodeKeyFile) {
+	if tmos.FileExists(nodeKeyFile) {
 		logger.Info("Found node key", "path", nodeKeyFile)
 	} else {
 		if _, err := p2p.LoadOrGenNodeKey(nodeKeyFile); err != nil {
@@ -51,18 +53,21 @@ func initFilesWithConfig(config *cfg.Config) error {
 
 	// genesis file
 	genFile := config.GenesisFile()
-	if cmn.FileExists(genFile) {
+	if tmos.FileExists(genFile) {
 		logger.Info("Found genesis file", "path", genFile)
 	} else {
 		genDoc := types.GenesisDoc{
-			ChainID:         fmt.Sprintf("test-chain-%v", cmn.RandStr(6)),
+			ChainID:         fmt.Sprintf("test-chain-%v", tmrand.Str(6)),
 			GenesisTime:     tmtime.Now(),
 			ConsensusParams: types.DefaultConsensusParams(),
 		}
-		key := pv.GetPubKey()
+		pubKey, err := pv.GetPubKey()
+		if err != nil {
+			return errors.Wrap(err, "can't get pubkey")
+		}
 		genDoc.Validators = []types.GenesisValidator{{
-			Address: key.Address(),
-			PubKey:  key,
+			Address: pubKey.Address(),
+			PubKey:  pubKey,
 			Power:   10,
 		}}
 

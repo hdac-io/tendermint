@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/hdac-io/tendermint/store"
-
 	"github.com/stretchr/testify/assert"
+
+	dbm "github.com/tendermint/tm-db"
 
 	abci "github.com/hdac-io/tendermint/abci/types"
 	cfg "github.com/hdac-io/tendermint/config"
@@ -20,7 +20,9 @@ import (
 	sm "github.com/hdac-io/tendermint/state"
 	"github.com/hdac-io/tendermint/types"
 	tmtime "github.com/hdac-io/tendermint/types/time"
-	dbm "github.com/tendermint/tm-db"
+	"github.com/hdac-io/tendermint/store"
+	"github.com/hdac-io/tendermint/types"
+	tmtime "github.com/hdac-io/tendermint/types/time"
 )
 
 var config *cfg.Config
@@ -50,7 +52,11 @@ type BlockchainReactorPair struct {
 	app     proxy.AppConns
 }
 
-func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals []types.PrivValidator, maxBlockHeight int64) BlockchainReactorPair {
+func newBlockchainReactor(
+	logger log.Logger,
+	genDoc *types.GenesisDoc,
+	privVals []types.PrivValidator,
+	maxBlockHeight int64) BlockchainReactorPair {
 	if len(privVals) != 1 {
 		panic("only support one validator")
 	}
@@ -83,17 +89,24 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 
 	// let's add some blocks in
 	for blockHeight := int64(1); blockHeight <= maxBlockHeight; blockHeight++ {
-		lastCommit := types.NewCommit(types.BlockID{}, nil)
+		lastCommit := types.NewCommit(blockHeight-1, 0, types.BlockID{}, nil)
 		if blockHeight > 1 {
 			lastBlockMeta := blockStore.LoadBlockMeta(blockHeight - 1)
 			lastBlock := blockStore.LoadBlock(blockHeight - 1)
 
-			vote, err := types.MakeVote(lastBlock.Header.Height, lastBlockMeta.BlockID, state.Validators, privVals[0], lastBlock.Header.ChainID)
+			vote, err := types.MakeVote(
+				lastBlock.Header.Height,
+				lastBlockMeta.BlockID,
+				state.Validators,
+				privVals[0],
+				lastBlock.Header.ChainID,
+				time.Now(),
+			)
 			if err != nil {
 				panic(err)
 			}
-			voteCommitSig := vote.CommitSig()
-			lastCommit = types.NewCommit(lastBlockMeta.BlockID, []*types.CommitSig{voteCommitSig})
+			lastCommit = types.NewCommit(vote.Height, vote.Round,
+				lastBlockMeta.BlockID, []types.CommitSig{vote.CommitSig()})
 		}
 
 		thisBlock := makeBlock(blockHeight, state, lastCommit)
@@ -101,7 +114,7 @@ func newBlockchainReactor(logger log.Logger, genDoc *types.GenesisDoc, privVals 
 		thisParts := thisBlock.MakePartSet(types.BlockPartSizeBytes)
 		blockID := types.BlockID{Hash: thisBlock.Hash(), PartsHeader: thisParts.Header()}
 
-		state, err = blockExec.ApplyBlock(state, blockID, thisBlock)
+		state, _, err = blockExec.ApplyBlock(state, blockID, thisBlock)
 		if err != nil {
 			panic(errors.Wrap(err, "error apply block"))
 		}

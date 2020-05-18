@@ -5,8 +5,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	cmn "github.com/hdac-io/tendermint/libs/common"
 	"github.com/hdac-io/tendermint/libs/log"
+	tmos "github.com/hdac-io/tendermint/libs/os"
 	"github.com/hdac-io/tendermint/privval"
 )
 
@@ -58,7 +58,7 @@ func ResetAll(dbDir, addrBookFile, privValKeyFile, privValStateFile string, logg
 		logger.Error("Error removing all blockchain history", "dir", dbDir, "err", err)
 	}
 	// recreate the dbDir since the privVal state needs to live there
-	cmn.EnsureDir(dbDir, 0700)
+	tmos.EnsureDir(dbDir, 0700)
 	resetFilePV(privValKeyFile, privValStateFile, logger)
 }
 
