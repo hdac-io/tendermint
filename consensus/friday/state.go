@@ -1579,8 +1579,6 @@ func (cs *ConsensusState) enterCommit(height int64, commitRound int) {
 		// Done enterCommit:
 		// keep cs.Round the same, commitRound points to the right Precommits set.
 		cs.updateRoundStep(height, heightRound.Round, cstypes.RoundStepCommit)
-		heightRound.CommitRound = commitRound
-		heightRound.CommitTime = tmtime.Now()
 		cs.newStep(height)
 
 		// Maybe finalize immediately.
@@ -1628,7 +1626,7 @@ func (cs *ConsensusState) tryFinalizeCommit(height int64) {
 		return
 	}
 
-	blockID, ok := heightRound.Votes.Precommits(heightRound.CommitRound).TwoThirdsMajority()
+	blockID, ok := heightRound.Votes.Precommits(heightRound.Round).TwoThirdsMajority()
 	if !ok || len(blockID.Hash) == 0 {
 		logger.Error("Attempt to finalize failed. There was no +2/3 majority, or +2/3 was for <nil>.")
 		return
@@ -1659,7 +1657,7 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 		return
 	}
 
-	blockID, ok := heightRound.Votes.Precommits(heightRound.CommitRound).TwoThirdsMajority()
+	blockID, ok := heightRound.Votes.Precommits(heightRound.Round).TwoThirdsMajority()
 	block, blockParts := heightRound.ProposalBlock, heightRound.ProposalBlockParts
 
 	if !ok {
@@ -1692,8 +1690,6 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 			heightRound.LockedRound = -1
 			heightRound.LockedBlock = nil
 			heightRound.LockedBlockParts = nil
-			heightRound.CommitRound = -1
-			heightRound.CommitTime = time.Time{}
 
 			cs.eventBus.PublishEventUnlock(heightRound.RoundStateEvent())
 			cs.enterNewRound(height, heightRound.Round+1)
@@ -1708,6 +1704,14 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 		"height", block.Height, "hash", block.Hash(), "root", block.AppHash)
 	cs.Logger.Info(fmt.Sprintf("%v", block))
 
+	if block.Height > 1 && !cs.config.SkipTimeoutCommit {
+		if prevRs := cs.getRoundState(block.Height - 1); prevRs != nil {
+			now := tmtime.Now()
+			duration := cs.config.Commit(prevRs.CommitTime).Sub(now)
+			time.Sleep(duration)
+		}
+	}
+
 	fail.Fail() // XXX
 
 	lenULB := cs.state.ConsensusParams.Block.LenULB
@@ -1716,7 +1720,7 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 	if cs.blockStore.Height() < block.Height {
 		// NOTE: the seenCommit is local justification to commit this block,
 		// but may differ from the LastCommit included in the next block
-		precommits := heightRound.Votes.Precommits(heightRound.CommitRound)
+		precommits := heightRound.Votes.Precommits(heightRound.Round)
 		seenCommit := precommits.MakeCommit()
 		cs.blockStore.SaveBlock(block, blockParts, seenCommit, lenULB)
 	} else {
@@ -1761,6 +1765,9 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 		}
 		return
 	}
+
+	heightRound.CommitRound = heightRound.Round
+	heightRound.CommitTime = tmtime.Now()
 
 	fail.Fail() // XXX
 
