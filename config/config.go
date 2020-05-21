@@ -809,6 +809,7 @@ func DefaultConsensusConfig() *ConsensusConfig {
 func DefaultFridayConsensusConfig() *ConsensusConfig {
 	cfg := DefaultConsensusConfig()
 	cfg.Module = "friday"
+	cfg.TimeoutCommit = 800 * time.Millisecond
 	return cfg
 }
 
