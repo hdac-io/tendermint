@@ -1106,7 +1106,7 @@ func (cs *ConsensusState) defaultDecideProposal(height int64, round int) {
 		// NOTE: message handlers are executed in parallel(goroutine).
 		// So sometimes the block part message is processed before the proposal message.
 		// There is a slight delay.
-		time.Sleep(time.Millisecond * 10)
+		time.Sleep(time.Millisecond * 100)
 
 		for i := 0; i < blockParts.Total(); i++ {
 			part := blockParts.GetPart(i)
