@@ -2174,9 +2174,9 @@ func (cs *ConsensusState) signAddVote(height int64, type_ types.SignedMsgType, h
 		cs.Logger.Info("Signed and pushed vote", "height", heightRound.Height, "round", heightRound.Round, "vote", vote, "err", err)
 		return vote
 	}
-	//if !cs.replayMode {
-	cs.Logger.Error("Error signing vote", "height", heightRound.Height, "round", heightRound.Round, "vote", vote, "err", err)
-	//}
+	if !cs.replayMode {
+		cs.Logger.Error("Error signing vote", "height", heightRound.Height, "round", heightRound.Round, "vote", vote, "err", err)
+	}
 	return nil
 }
 
