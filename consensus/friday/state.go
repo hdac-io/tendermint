@@ -950,7 +950,6 @@ func (cs *ConsensusState) enterNewRound(height int64, round int) {
 	}
 
 	logger.Info(fmt.Sprintf("enterNewRound(%v/%v). Current: %v/%v", height, round, heightRound.Round, heightRound.Step))
-
 	// Increment validators if necessary
 	validators := heightRound.Validators
 	if heightRound.Round < round {
@@ -983,6 +982,22 @@ func (cs *ConsensusState) enterNewRound(height int64, round int) {
 
 	cs.eventBus.PublishEventNewRound(heightRound.NewRoundEvent())
 	cs.metrics.Rounds.Set(float64(round))
+
+	if height > cs.state.ConsensusParams.Block.LenULB {
+		ulbHeight := height - cs.state.ConsensusParams.Block.LenULB
+		ulbRound := -1
+		if ulbRs := cs.GetRoundState(ulbHeight); ulbRs != nil {
+			ulbRound = ulbRs.Round
+		}
+		// NOTE: If the consensus of the previously ulb block fails,
+		// sleep to sufficient time for receive a new previous block and consensus to proceed.
+		// If there is no waiting time, the connected now height blocks will fail consecutively,
+		// so round number will not dcrease.
+		if ulbRound > 0 && round == 0 {
+			logger.Info(fmt.Sprintf("Wait for cut off to continuous failure. Ulb: %v/%v", ulbHeight, ulbRound))
+			time.Sleep(cs.config.PreviousFailure(ulbRound))
+		}
+	}
 
 	// Wait for txs to be available in the mempool
 	// before we enterPropose in round 0. If the last block changed the app hash,

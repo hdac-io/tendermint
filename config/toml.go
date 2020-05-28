@@ -330,6 +330,8 @@ timeout_prevote_delta = "{{ .Consensus.TimeoutPrevoteDelta }}"
 timeout_precommit = "{{ .Consensus.TimeoutPrecommit }}"
 timeout_precommit_delta = "{{ .Consensus.TimeoutPrecommitDelta }}"
 timeout_commit = "{{ .Consensus.TimeoutCommit }}"
+timeout_previous_failure = "{{ .Consensus.TimeoutPreviousFailure }}"
+timeout_previous_failure_delta = "{{ .Consensus.TimeoutPreviousFailureDelta }}"
 
 # Make progress as soon as we have all the precommits (as if TimeoutCommit = 0)
 skip_timeout_commit = {{ .Consensus.SkipTimeoutCommit }}
