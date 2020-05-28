@@ -765,13 +765,15 @@ type ConsensusConfig struct {
 	WalPath string `mapstructure:"wal_file"`
 	walFile string // overrides WalPath if set
 
-	TimeoutPropose        time.Duration `mapstructure:"timeout_propose"`
-	TimeoutProposeDelta   time.Duration `mapstructure:"timeout_propose_delta"`
-	TimeoutPrevote        time.Duration `mapstructure:"timeout_prevote"`
-	TimeoutPrevoteDelta   time.Duration `mapstructure:"timeout_prevote_delta"`
-	TimeoutPrecommit      time.Duration `mapstructure:"timeout_precommit"`
-	TimeoutPrecommitDelta time.Duration `mapstructure:"timeout_precommit_delta"`
-	TimeoutCommit         time.Duration `mapstructure:"timeout_commit"`
+	TimeoutPropose              time.Duration `mapstructure:"timeout_propose"`
+	TimeoutProposeDelta         time.Duration `mapstructure:"timeout_propose_delta"`
+	TimeoutPrevote              time.Duration `mapstructure:"timeout_prevote"`
+	TimeoutPrevoteDelta         time.Duration `mapstructure:"timeout_prevote_delta"`
+	TimeoutPrecommit            time.Duration `mapstructure:"timeout_precommit"`
+	TimeoutPrecommitDelta       time.Duration `mapstructure:"timeout_precommit_delta"`
+	TimeoutCommit               time.Duration `mapstructure:"timeout_commit"`
+	TimeoutPreviousFailure      time.Duration `mapstructure:"timeout_previous_failure"`
+	TimeoutPreviousFailureDelta time.Duration `mapstructure:"timeout_previous_failure_delta"`
 
 	// Make progress as soon as we have all the precommits (as if TimeoutCommit = 0)
 	SkipTimeoutCommit bool `mapstructure:"skip_timeout_commit"`
@@ -797,6 +799,8 @@ func DefaultConsensusConfig() *ConsensusConfig {
 		TimeoutPrecommit:            1000 * time.Millisecond,
 		TimeoutPrecommitDelta:       500 * time.Millisecond,
 		TimeoutCommit:               1000 * time.Millisecond,
+		TimeoutPreviousFailure:      2000 * time.Millisecond,
+		TimeoutPreviousFailureDelta: 500 * time.Millisecond,
 		SkipTimeoutCommit:           false,
 		CreateEmptyBlocks:           true,
 		CreateEmptyBlocksInterval:   0 * time.Second,
@@ -823,6 +827,8 @@ func TestConsensusConfig() *ConsensusConfig {
 	cfg.TimeoutPrecommit = 10 * time.Millisecond
 	cfg.TimeoutPrecommitDelta = 1 * time.Millisecond
 	cfg.TimeoutCommit = 10 * time.Millisecond
+	cfg.TimeoutPreviousFailure = 20 * time.Millisecond
+	cfg.TimeoutPreviousFailureDelta = 1 * time.Millisecond
 	cfg.SkipTimeoutCommit = true
 	cfg.PeerGossipSleepDuration = 5 * time.Millisecond
 	cfg.PeerQueryMaj23SleepDuration = 250 * time.Millisecond
@@ -865,6 +871,13 @@ func (cfg *ConsensusConfig) Precommit(round int) time.Duration {
 // Commit returns the amount of time to wait for straggler votes after receiving +2/3 precommits for a single block (ie. a commit).
 func (cfg *ConsensusConfig) Commit(t time.Time) time.Time {
 	return t.Add(cfg.TimeoutCommit)
+}
+
+// PreviousFailure returns the amount of time to wait for receiving new previous block after failed of connected previous block
+func (cfg *ConsensusConfig) PreviousFailure(round int) time.Duration {
+	return time.Duration(
+		cfg.TimeoutPreviousFailure.Nanoseconds()+cfg.TimeoutPreviousFailureDelta.Nanoseconds()*int64(round),
+	) * time.Nanosecond
 }
 
 // WalFile returns the full path to the write-ahead log file

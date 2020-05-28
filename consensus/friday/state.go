@@ -1692,6 +1692,11 @@ func (cs *ConsensusState) finalizeCommit(height int64) {
 			heightRound.LockedBlockParts = nil
 
 			cs.eventBus.PublishEventUnlock(heightRound.RoundStateEvent())
+			// NOTE: If the consensus of the previously connected block fails,
+			// sleep to sufficient time for receive a new previous block and consensus to proceed.
+			// If there is no waiting time, the connected now height blocks will fail consecutively,
+			// so round number will not dcrease.
+			time.Sleep(cs.config.PreviousFailure(heightRound.Round))
 			cs.enterNewRound(height, heightRound.Round+1)
 			return
 
