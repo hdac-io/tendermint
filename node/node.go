@@ -279,6 +279,9 @@ func createAndStartIndexerService(config *cfg.Config, dbProvider DBProvider,
 
 func doHandshake(config *cfg.Config, stateDB dbm.DB, state sm.State, blockStore sm.BlockStore,
 	genDoc *types.GenesisDoc, eventBus *types.EventBus, proxyApp proxy.AppConns, consensusLogger log.Logger) error {
+	if config.Consensus.Module != genDoc.ConsensusModule {
+		return fmt.Errorf("unmatched between Consensus.Module in config.toml and consensus_module in genesis.json")
+	}
 
 	// Handshaker it's only used here. don't abstract.
 	switch config.Consensus.Module {
