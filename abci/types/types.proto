@@ -93,6 +93,7 @@ message RequestCheckTx {
 
 message RequestDeliverTx {
   bytes tx = 1;
+  int32 index = 2;
 }
 
 message RequestEndBlock {
@@ -194,6 +195,7 @@ message ResponseDeliverTx {
   int64 gas_used = 6;
   repeated Event events = 7 [(gogoproto.nullable)=false, (gogoproto.jsontag)="events,omitempty"];
   string codespace = 8;
+  int32 index = 9;
 }
 
 message ResponseEndBlock {

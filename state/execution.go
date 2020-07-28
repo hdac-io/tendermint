@@ -377,7 +377,6 @@ func execBlockOnProxyApp(
 ) (*ABCIResponses, error) {
 	var validTxs, invalidTxs = 0, 0
 
-	txIndex := 0
 	abciResponses := NewABCIResponses(block)
 
 	// Execute transactions and get hash.
@@ -393,8 +392,7 @@ func execBlockOnProxyApp(
 				logger.Debug("Invalid tx", "code", txRes.Code, "log", txRes.Log)
 				invalidTxs++
 			}
-			abciResponses.DeliverTx[txIndex] = txRes
-			txIndex++
+			abciResponses.DeliverTx[r.DeliverTx.Index] = txRes
 		}
 	}
 	proxyAppConn.SetResponseCallback(proxyCb)
@@ -415,8 +413,8 @@ func execBlockOnProxyApp(
 	}
 
 	// Run txs of block.
-	for _, tx := range block.Txs {
-		proxyAppConn.DeliverTxAsync(abci.RequestDeliverTx{Tx: tx})
+	for index, tx := range block.Txs {
+		go proxyAppConn.DeliverTxAsync(abci.RequestDeliverTx{Tx: tx, Index: int32(index)})
 		if err := proxyAppConn.Error(); err != nil {
 			return nil, err
 		}
