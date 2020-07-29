@@ -82,6 +82,7 @@ func (app *localClient) SetOptionAsync(req types.RequestSetOption) *ReqRes {
 }
 
 func (app *localClient) DeliverTxAsync(params types.RequestDeliverTx) *ReqRes {
+	println("I'm tendermint DeliverTxAsync! ", params.Index)
 	res := app.Application.DeliverTx(params)
 	return app.callback(
 		types.ToRequestDeliverTx(params),
