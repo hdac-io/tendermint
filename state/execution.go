@@ -414,7 +414,7 @@ func execBlockOnProxyApp(
 
 	// Run txs of block.
 	for index, tx := range block.Txs {
-		go proxyAppConn.DeliverTxAsync(abci.RequestDeliverTx{Tx: tx, Index: int32(index)})
+		proxyAppConn.DeliverTxAsync(abci.RequestDeliverTx{Tx: tx, Index: int32(index)})
 		if err := proxyAppConn.Error(); err != nil {
 			return nil, err
 		}
