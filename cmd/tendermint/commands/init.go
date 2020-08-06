@@ -27,14 +27,31 @@ func initFilesWithConfig(config *cfg.Config) error {
 	// private validator
 	privValKeyFile := config.PrivValidatorKeyFile()
 	privValStateFile := config.PrivValidatorStateFile()
-	var pv *privval.FilePV
+	var pv types.PrivValidator
 	if cmn.FileExists(privValKeyFile) {
-		pv = privval.LoadFilePV(privValKeyFile, privValStateFile)
+		switch config.Consensus.Module {
+		case "tendermint":
+			pv = privval.LoadFilePV(privValKeyFile, privValStateFile)
+		case "friday":
+			pv = privval.LoadFridayFilePV(privValKeyFile, privValStateFile)
+		default:
+			return fmt.Errorf("invalid consensus module %s", config.Consensus.Module)
+		}
 		logger.Info("Found private validator", "keyFile", privValKeyFile,
 			"stateFile", privValStateFile)
 	} else {
-		pv = privval.GenFilePV(privValKeyFile, privValStateFile)
-		pv.Save()
+		switch config.Consensus.Module {
+		case "tendermint":
+			fpv := privval.GenFilePV(privValKeyFile, privValStateFile)
+			fpv.Save()
+			pv = fpv
+		case "friday":
+			ffpv := privval.GenFridayFilePV(privValKeyFile, privValStateFile)
+			ffpv.Save()
+			pv = ffpv
+		default:
+			return fmt.Errorf("invalid consensus module %s", config.Consensus.Module)
+		}
 		logger.Info("Generated private validator", "keyFile", privValKeyFile,
 			"stateFile", privValStateFile)
 	}
@@ -54,10 +71,20 @@ func initFilesWithConfig(config *cfg.Config) error {
 	if cmn.FileExists(genFile) {
 		logger.Info("Found genesis file", "path", genFile)
 	} else {
+		var consensusParams *types.ConsensusParams
+		switch config.Consensus.Module {
+		case "tednermint":
+			consensusParams = types.DefaultConsensusParams()
+		case "friday":
+			consensusParams = types.DefaultFridayConsensusParams()
+		default:
+			return fmt.Errorf("invalid consensus module %s", config.Consensus.Module)
+		}
 		genDoc := types.GenesisDoc{
 			ChainID:         fmt.Sprintf("test-chain-%v", cmn.RandStr(6)),
 			GenesisTime:     tmtime.Now(),
-			ConsensusParams: types.DefaultConsensusParams(),
+			ConsensusParams: consensusParams,
+			ConsensusModule: config.Consensus.Module,
 		}
 		key := pv.GetPubKey()
 		genDoc.Validators = []types.GenesisValidator{{

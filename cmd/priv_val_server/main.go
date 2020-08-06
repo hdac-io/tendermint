@@ -8,6 +8,7 @@ import (
 	"github.com/hdac-io/tendermint/crypto/bls"
 	cmn "github.com/hdac-io/tendermint/libs/common"
 	"github.com/hdac-io/tendermint/libs/log"
+	"github.com/hdac-io/tendermint/types"
 
 	"github.com/hdac-io/tendermint/privval"
 )
@@ -18,6 +19,7 @@ func main() {
 		chainID          = flag.String("chain-id", "mychain", "chain id")
 		privValKeyPath   = flag.String("priv-key", "", "priv val key file path")
 		privValStatePath = flag.String("priv-state", "", "priv val state file path")
+		isFridayPV       = flag.Bool("friday", false, "run for friday")
 
 		logger = log.NewTMLogger(
 			log.NewSyncWriter(os.Stdout),
@@ -33,7 +35,12 @@ func main() {
 		"privStatePath", *privValStatePath,
 	)
 
-	pv := privval.LoadFilePV(*privValKeyPath, *privValStatePath)
+	var pv types.PrivValidator
+	if *isFridayPV {
+		pv = privval.LoadFridayFilePV(*privValKeyPath, *privValStatePath)
+	} else {
+		pv = privval.LoadFilePV(*privValKeyPath, *privValStatePath)
+	}
 
 	var dialer privval.SocketDialer
 	protocol, address := cmn.ProtocolAndAddress(*addr)

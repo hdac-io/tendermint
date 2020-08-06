@@ -41,7 +41,7 @@ func EnsureRoot(rootDir string) {
 
 	// Write default config file if missing.
 	if !cmn.FileExists(configFilePath) {
-		writeDefaultConfigFile(configFilePath)
+		writeDefaultFridayConfigFile(configFilePath)
 	}
 }
 
@@ -49,6 +49,12 @@ func EnsureRoot(rootDir string) {
 // alongside the writing of the genesis.json and priv_validator.json
 func writeDefaultConfigFile(configFilePath string) {
 	WriteConfigFile(configFilePath, DefaultConfig())
+}
+
+// XXX: this func should probably be called by cmd/tendermint/commands/init.go
+// alongside the writing of the genesis.json and priv_validator.json
+func writeDefaultFridayConfigFile(configFilePath string) {
+	WriteConfigFile(configFilePath, DefaultFridayConfig())
 }
 
 // WriteConfigFile renders config using the template and writes it to configFilePath.
@@ -309,7 +315,13 @@ version = "{{ .FastSync.Version }}"
 ##### consensus configuration options #####
 [consensus]
 
+# Consensus version to use:
+#   1) "tendermint" (default) - the default consensus implementation
+#   2) "friday" - the friday consensus implementation 
+module = "{{ .Consensus.Module }}"
+
 wal_file = "{{ js .Consensus.WalPath }}"
+
 
 timeout_propose = "{{ .Consensus.TimeoutPropose }}"
 timeout_propose_delta = "{{ .Consensus.TimeoutProposeDelta }}"
@@ -318,6 +330,8 @@ timeout_prevote_delta = "{{ .Consensus.TimeoutPrevoteDelta }}"
 timeout_precommit = "{{ .Consensus.TimeoutPrecommit }}"
 timeout_precommit_delta = "{{ .Consensus.TimeoutPrecommitDelta }}"
 timeout_commit = "{{ .Consensus.TimeoutCommit }}"
+timeout_previous_failure = "{{ .Consensus.TimeoutPreviousFailure }}"
+timeout_previous_failure_delta = "{{ .Consensus.TimeoutPreviousFailureDelta }}"
 
 # Make progress as soon as we have all the precommits (as if TimeoutCommit = 0)
 skip_timeout_commit = {{ .Consensus.SkipTimeoutCommit }}

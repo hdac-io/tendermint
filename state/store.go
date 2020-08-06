@@ -2,6 +2,7 @@ package state
 
 import (
 	"fmt"
+	"sync"
 
 	abci "github.com/hdac-io/tendermint/abci/types"
 	cmn "github.com/hdac-io/tendermint/libs/common"
@@ -15,6 +16,7 @@ const (
 	// https://github.com/tendermint/tendermint/pull/3438
 	// 100000 results in ~ 100ms to get 100 validators (see BenchmarkLoadValidators)
 	valSetCheckpointInterval = 100000
+	valSetCacheSize          = 4
 )
 
 //------------------------------------------------------------------------
@@ -29,6 +31,10 @@ func calcConsensusParamsKey(height int64) []byte {
 
 func calcABCIResponsesKey(height int64) []byte {
 	return []byte(fmt.Sprintf("abciResponsesKey:%v", height))
+}
+
+func calcAppHashKey(height int64) []byte {
+	return []byte(fmt.Sprintf("appHashKey:%v", height))
 }
 
 // LoadStateFromDBOrGenesisFile loads the most recent state from the database,
@@ -94,6 +100,12 @@ func SaveState(db dbm.DB, state State) {
 }
 
 func saveState(db dbm.DB, state State, key []byte) {
+	// TODO: refactor to package seperation
+	if state.Version.Consensus.Module == "friday" {
+		saveFridayState(db, state, key)
+		return
+	}
+
 	nextHeight := state.LastBlockHeight + 1
 	// If first block, save validators for block 1.
 	if nextHeight == 1 {
@@ -106,6 +118,32 @@ func saveState(db dbm.DB, state State, key []byte) {
 	saveValidatorsInfo(db, nextHeight+1, state.LastHeightValidatorsChanged, state.NextValidators)
 	// Save next consensus params.
 	saveConsensusParamsInfo(db, nextHeight, state.LastHeightConsensusParamsChanged, state.ConsensusParams)
+	// Save current app hash
+	saveAppHash(db, state.LastBlockHeight, state.AppHash)
+
+	db.SetSync(key, state.Bytes())
+}
+
+func saveFridayState(db dbm.DB, state State, key []byte) {
+	nextHeight := state.LastBlockHeight + 1
+	// If first block, save validators for block 1.
+	if nextHeight == 1 {
+		// This extra logic due to Tendermint validator set changes being delayed 1 block.
+		// It may get overwritten due to InitChain validator updates.
+		lastHeightVoteChanged := int64(1)
+		for delayHeight := nextHeight; delayHeight <= state.ConsensusParams.Block.LenULB; delayHeight++ {
+			saveValidatorsInfo(db, delayHeight, lastHeightVoteChanged, state.Validators)
+		}
+	}
+
+	// Save next validators.
+	saveValidatorsInfo(db, nextHeight+state.ConsensusParams.Block.LenULB, state.LastHeightValidatorsChanged, state.NextValidators)
+	// Save next consensus params.
+	// TODO: change delay distance to after ULB distance
+	saveConsensusParamsInfo(db, nextHeight, state.LastHeightConsensusParamsChanged, state.ConsensusParams)
+	// Save current app hash
+	saveAppHash(db, state.LastBlockHeight, state.AppHash)
+
 	db.SetSync(key, state.Bytes())
 }
 
@@ -183,9 +221,15 @@ func (valInfo *ValidatorsInfo) Bytes() []byte {
 	return cdc.MustMarshalBinaryBare(valInfo)
 }
 
+var cachedValidators sync.Map
+
 // LoadValidators loads the ValidatorSet for a given height.
 // Returns ErrNoValSetForHeight if the validator set can't be found for this height.
 func LoadValidators(db dbm.DB, height int64) (*types.ValidatorSet, error) {
+	if cached, exist := cachedValidators.Load(height); exist {
+		return cached.(*ValidatorsInfo).ValidatorSet, nil
+	}
+
 	valInfo := loadValidatorsInfo(db, height)
 	if valInfo == nil {
 		return nil, ErrNoValSetForHeight{height}
@@ -213,6 +257,9 @@ func LoadValidators(db dbm.DB, height int64) (*types.ValidatorSet, error) {
 		valInfo2.ValidatorSet.IncrementProposerPriority(int(height - lastStoredHeight)) // mutate
 		valInfo = valInfo2
 	}
+
+	cachedValidators.Store(height, valInfo)
+	cachedValidators.Delete(height - valSetCacheSize)
 
 	return valInfo.ValidatorSet, nil
 }
@@ -330,4 +377,17 @@ func saveConsensusParamsInfo(db dbm.DB, nextHeight, changeHeight int64, params t
 		paramsInfo.ConsensusParams = params
 	}
 	db.Set(calcConsensusParamsKey(nextHeight), paramsInfo.Bytes())
+}
+
+//-----------------------------------------------------------------------------
+// saveAppHash persists the app result hash.
+func saveAppHash(db dbm.DB, height int64, appHash []byte) {
+	db.SetSync(calcAppHashKey(height), appHash)
+}
+
+// LoadAppHash for save the db, get from CreateProposalBlcok
+// it's useful seperate to using state into block making logic
+func LoadAppHash(db dbm.DB, height int64) ([]byte, error) {
+	appHash := db.Get(calcAppHashKey(height))
+	return appHash, nil
 }

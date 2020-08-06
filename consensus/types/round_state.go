@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	cmn "github.com/hdac-io/tendermint/libs/common"
@@ -65,6 +66,7 @@ func (rs RoundStepType) String() string {
 // NOTE: Not thread safe. Should only be manipulated by functions downstream
 // of the cs.receiveRoutine
 type RoundState struct {
+	sync.RWMutex
 	Height                    int64               `json:"height"` // Height we are working on
 	Round                     int                 `json:"round"`
 	Step                      RoundStepType       `json:"step"`
@@ -197,6 +199,32 @@ func (rs *RoundState) StringIndented(indent string) string {
 func (rs *RoundState) StringShort() string {
 	return fmt.Sprintf(`RoundState{H:%v R:%v S:%v ST:%v}`,
 		rs.Height, rs.Round, rs.Step, rs.StartTime)
+}
+
+// Copy without mutex
+func (rs *RoundState) Copy() RoundState {
+	return RoundState{
+		Height:                    rs.Height,
+		Round:                     rs.Round,
+		Step:                      rs.Step,
+		StartTime:                 rs.StartTime,
+		CommitTime:                rs.CommitTime,
+		Validators:                rs.Validators,
+		Proposal:                  rs.Proposal,
+		ProposalBlock:             rs.ProposalBlock,
+		ProposalBlockParts:        rs.ProposalBlockParts,
+		LockedRound:               rs.LockedRound,
+		LockedBlock:               rs.LockedBlock,
+		LockedBlockParts:          rs.LockedBlockParts,
+		ValidRound:                rs.ValidRound,
+		ValidBlock:                rs.ValidBlock,
+		ValidBlockParts:           rs.ValidBlockParts,
+		Votes:                     rs.Votes,
+		CommitRound:               rs.CommitRound,
+		LastCommit:                rs.LastCommit,
+		LastValidators:            rs.LastValidators,
+		TriggeredTimeoutPrecommit: rs.TriggeredTimeoutPrecommit,
+	}
 }
 
 //-----------------------------------------------------------

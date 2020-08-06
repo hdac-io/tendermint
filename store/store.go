@@ -143,7 +143,7 @@ func (bs *BlockStore) LoadSeenCommit(height int64) *types.Commit {
 //             If all the nodes restart after committing a block,
 //             we need this to reload the precommits to catch-up nodes to the
 //             most recent height.  Otherwise they'd stall at H-1.
-func (bs *BlockStore) SaveBlock(block *types.Block, blockParts *types.PartSet, seenCommit *types.Commit) {
+func (bs *BlockStore) SaveBlock(block *types.Block, blockParts *types.PartSet, seenCommit *types.Commit, commitDistance int64) {
 	if block == nil {
 		panic("BlockStore can only save a non-nil block")
 	}
@@ -168,7 +168,7 @@ func (bs *BlockStore) SaveBlock(block *types.Block, blockParts *types.PartSet, s
 
 	// Save block commit (duplicate and separate from the Block)
 	blockCommitBytes := cdc.MustMarshalBinaryBare(block.LastCommit)
-	bs.db.Set(calcBlockCommitKey(height-1), blockCommitBytes)
+	bs.db.Set(calcBlockCommitKey(height-commitDistance), blockCommitBytes)
 
 	// Save seen commit (seen +2/3 precommits for block)
 	// NOTE: we can delete this at a later height

@@ -51,6 +51,9 @@ type CListMempool struct {
 	// txsMap: txKey -> CElement
 	txsMap sync.Map
 
+	// Map for Reservation
+	reserveTxsMap sync.Map
+
 	// Atomic integers
 	height     int64 // the last block Update()'d to
 	txsBytes   int64 // total size of mempool, in bytes
@@ -476,6 +479,12 @@ func (mem *CListMempool) ReapMaxBytesMaxGas(maxBytes, maxGas int64) types.Txs {
 	txs := make([]types.Tx, 0, mem.txs.Len())
 	for e := mem.txs.Front(); e != nil; e = e.Next() {
 		memTx := e.Value.(*mempoolTx)
+		txHash := txKey(memTx.tx)
+		if blockHeight, reserved := mem.reserveTxsMap.Load(txHash); reserved {
+			mem.logger.Info("skip reserved tx", "height", blockHeight.(int64), "hash", cmn.HexBytes(txHash[:]))
+			continue
+		}
+
 		// Check total size requirement
 		aminoOverhead := types.ComputeAminoOverhead(memTx.tx, 1)
 		if maxBytes > -1 && totalBytes+int64(len(memTx.tx))+aminoOverhead > maxBytes {
@@ -512,9 +521,34 @@ func (mem *CListMempool) ReapMaxTxs(max int) types.Txs {
 	txs := make([]types.Tx, 0, cmn.MinInt(mem.txs.Len(), max))
 	for e := mem.txs.Front(); e != nil && len(txs) <= max; e = e.Next() {
 		memTx := e.Value.(*mempoolTx)
+		txHash := txKey(memTx.tx)
+		if blockHeight, reserved := mem.reserveTxsMap.Load(txHash); reserved {
+			mem.logger.Info("skip reserved tx", "height", blockHeight.(int64), "hash", cmn.HexBytes(txHash[:]))
+			continue
+		}
+
 		txs = append(txs, memTx.tx)
 	}
 	return txs
+}
+
+// Reserve marking reserve the mempool that the given txs were received proposal block.
+func (mem *CListMempool) Reserve(blockHeight int64, blockTxs types.Txs) {
+	mem.proxyMtx.Lock()
+	defer mem.proxyMtx.Unlock()
+
+	for _, tx := range blockTxs {
+		mem.reserveTxsMap.Store(txKey(tx), blockHeight)
+	}
+}
+
+func (mem *CListMempool) Unreserve(blockTxs types.Txs) {
+	mem.proxyMtx.Lock()
+	defer mem.proxyMtx.Unlock()
+
+	for _, tx := range blockTxs {
+		mem.reserveTxsMap.Delete(txKey(tx))
+	}
 }
 
 func (mem *CListMempool) Update(
@@ -557,6 +591,8 @@ func (mem *CListMempool) Update(
 		if e, ok := mem.txsMap.Load(txKey(tx)); ok {
 			mem.removeTx(tx, e.(*clist.CElement), false)
 		}
+
+		mem.reserveTxsMap.Delete(txKey(tx))
 	}
 
 	// Either recheck non-committed txs to see if they became invalid

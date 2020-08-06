@@ -6,13 +6,13 @@ import (
 	"reflect"
 	"time"
 
-	amino "github.com/tendermint/go-amino"
 	"github.com/hdac-io/tendermint/behaviour"
 	"github.com/hdac-io/tendermint/libs/log"
 	"github.com/hdac-io/tendermint/p2p"
 	sm "github.com/hdac-io/tendermint/state"
 	"github.com/hdac-io/tendermint/store"
 	"github.com/hdac-io/tendermint/types"
+	amino "github.com/tendermint/go-amino"
 )
 
 const (
@@ -22,7 +22,7 @@ const (
 	trySendIntervalMS = 10
 
 	// ask for best height every 10s
-	statusUpdateIntervalSeconds = 10
+	statusUpdateIntervalSeconds = 1
 
 	// NOTE: keep up to date with bcBlockResponseMessage
 	bcBlockResponseMessagePrefixSize   = 4
@@ -100,7 +100,7 @@ func NewBlockchainReactor(state sm.State, blockExec *sm.BlockExecutor, store *st
 		eventsFromFSMCh:  eventsFromFSMCh,
 		errorsForFSMCh:   errorsForFSMCh,
 	}
-	fsm := NewFSM(startHeight, bcR)
+	fsm := NewFSM(startHeight, bcR, bcR.initialState.Version.Consensus.Module)
 	bcR.fsm = fsm
 	bcR.BaseReactor = *p2p.NewBaseReactor("BlockchainReactor", bcR)
 	//bcR.swReporter = behaviour.NewSwitcReporter(bcR.BaseReactor.Switch)
@@ -221,7 +221,13 @@ func (bcR *BlockchainReactor) Receive(chID byte, src p2p.Peer, msgBytes []byte) 
 		return
 	}
 
-	if err = msg.ValidateBasic(); err != nil {
+	switch bcR.initialState.Version.Consensus.Module {
+	case "tendermint":
+		err = msg.ValidateBasic()
+	case "friday":
+		err = msg.ValidateFridayBasic()
+	}
+	if err != nil {
 		bcR.Logger.Error("peer sent us invalid msg", "peer", src, "msg", msg, "err", err)
 		_ = bcR.swReporter.Report(behaviour.BadMessage(src.ID(), err.Error()))
 		return
@@ -420,14 +426,34 @@ func (bcR *BlockchainReactor) processBlock() error {
 	// NOTE: we can probably make this more efficient, but note that calling
 	// first.Hash() doesn't verify the tx contents, so MakePartSet() is
 	// currently necessary.
-	err = bcR.state.Validators.VerifyCommit(chainID, firstID, first.Height, second.LastCommit)
+	switch bcR.initialState.Version.Consensus.Module {
+	case "tendermint":
+		err = bcR.state.Validators.VerifyCommit(
+			chainID, firstID, first.Height, second.LastCommit)
+	case "friday":
+		if validators, valErr := sm.LoadValidators(bcR.blockExec.DB(), first.Height); valErr == nil {
+			err = validators.VerifyCommit(
+				chainID, firstID, first.Height, second.LastCommit)
+		} else {
+			err = valErr
+		}
+	default:
+		panic(fmt.Sprintf("unknown consensus module %s", bcR.initialState.Version.Consensus.Module))
+	}
 	if err != nil {
 		bcR.Logger.Error("error during commit verification", "err", err,
 			"first", first.Height, "second", second.Height)
 		return errBlockVerificationFailure
 	}
 
-	bcR.store.SaveBlock(first, firstParts, second.LastCommit)
+	switch bcR.initialState.Version.Consensus.Module {
+	case "tendermint":
+		bcR.store.SaveBlock(first, firstParts, second.LastCommit, 1)
+	case "friday":
+		bcR.store.SaveBlock(first, firstParts, second.LastCommit, bcR.state.ConsensusParams.Block.LenULB)
+	default:
+		panic(fmt.Sprintf("unknown consensus module %s", bcR.initialState.Version.Consensus.Module))
+	}
 
 	bcR.state, err = bcR.blockExec.ApplyBlock(bcR.state, firstID, first)
 	if err != nil {
@@ -470,6 +496,10 @@ func (bcR *BlockchainReactor) switchToConsensus() {
 	// else {
 	// Should only happen during testing.
 	// }
+}
+
+func (bcR *BlockchainReactor) lenULB() int64 {
+	return bcR.state.ConsensusParams.Block.LenULB
 }
 
 // Implements bcRNotifier
@@ -516,6 +546,7 @@ func (bcR *BlockchainReactor) resetStateTimer(name string, timer **time.Timer, t
 // BlockchainMessage is a generic message for this reactor.
 type BlockchainMessage interface {
 	ValidateBasic() error
+	ValidateFridayBasic() error
 }
 
 // RegisterBlockchainMessages registers the fast sync messages for amino encoding.
@@ -550,6 +581,11 @@ func (m *bcBlockRequestMessage) ValidateBasic() error {
 	return nil
 }
 
+// ValidateFridayBasic performs basic validation.
+func (m *bcBlockRequestMessage) ValidateFridayBasic() error {
+	return m.ValidateBasic()
+}
+
 func (m *bcBlockRequestMessage) String() string {
 	return fmt.Sprintf("[bcBlockRequestMessage %v]", m.Height)
 }
@@ -566,6 +602,11 @@ func (m *bcNoBlockResponseMessage) ValidateBasic() error {
 	return nil
 }
 
+// ValidateFridayBasic performs basic validation.
+func (m *bcNoBlockResponseMessage) ValidateFridayBasic() error {
+	return m.ValidateBasic()
+}
+
 func (m *bcNoBlockResponseMessage) String() string {
 	return fmt.Sprintf("[bcNoBlockResponseMessage %d]", m.Height)
 }
@@ -579,6 +620,11 @@ type bcBlockResponseMessage struct {
 // ValidateBasic performs basic validation.
 func (m *bcBlockResponseMessage) ValidateBasic() error {
 	return m.Block.ValidateBasic()
+}
+
+// ValidateFridayBasic performs basic validation(specialized for friday).
+func (m *bcBlockResponseMessage) ValidateFridayBasic() error {
+	return m.Block.ValidateFridayBasic()
 }
 
 func (m *bcBlockResponseMessage) String() string {
@@ -599,6 +645,11 @@ func (m *bcStatusRequestMessage) ValidateBasic() error {
 	return nil
 }
 
+// ValidateFridayBasic performs basic validation.
+func (m *bcStatusRequestMessage) ValidateFridayBasic() error {
+	return m.ValidateBasic()
+}
+
 func (m *bcStatusRequestMessage) String() string {
 	return fmt.Sprintf("[bcStatusRequestMessage %v]", m.Height)
 }
@@ -615,6 +666,11 @@ func (m *bcStatusResponseMessage) ValidateBasic() error {
 		return errors.New("negative Height")
 	}
 	return nil
+}
+
+// ValidateFridayBasic performs basic validation.
+func (m *bcStatusResponseMessage) ValidateFridayBasic() error {
+	return m.ValidateBasic()
 }
 
 func (m *bcStatusResponseMessage) String() string {

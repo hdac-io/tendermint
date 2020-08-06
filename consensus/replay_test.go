@@ -628,7 +628,7 @@ func testHandshakeReplay(t *testing.T, config *cfg.Config, nBlocks int, mode uin
 
 	state := genisisState.Copy()
 	// run the chain through state.ApplyBlock to build up the tendermint state
-	state = buildTMStateFromChain(config, stateDB, state, chain, nBlocks, mode)
+	state = buildTMStateFromChain(store, config, stateDB, state, chain, nBlocks, mode)
 	latestAppHash := state.AppHash
 
 	// make a new client creator
@@ -641,7 +641,7 @@ func testHandshakeReplay(t *testing.T, config *cfg.Config, nBlocks int, mode uin
 		proxyApp := proxy.NewAppConns(clientCreator2)
 		stateDB1 := dbm.NewMemDB()
 		sm.SaveState(stateDB1, genisisState)
-		buildAppStateFromChain(proxyApp, stateDB1, genisisState, chain, nBlocks, mode)
+		buildAppStateFromChain(store, proxyApp, stateDB1, genisisState, chain, nBlocks, mode)
 	}
 
 	// now start the app using the handshake - it should sync
@@ -679,9 +679,9 @@ func testHandshakeReplay(t *testing.T, config *cfg.Config, nBlocks int, mode uin
 	}
 }
 
-func applyBlock(stateDB dbm.DB, st sm.State, blk *types.Block, proxyApp proxy.AppConns) sm.State {
+func applyBlock(store sm.BlockStore, stateDB dbm.DB, st sm.State, blk *types.Block, proxyApp proxy.AppConns) sm.State {
 	testPartSize := types.BlockPartSizeBytes
-	blockExec := sm.NewBlockExecutor(stateDB, log.TestingLogger(), proxyApp.Consensus(), mempool, evpool)
+	blockExec := sm.NewBlockExecutor(store, stateDB, log.TestingLogger(), proxyApp.Consensus(), mempool, evpool)
 
 	blkID := types.BlockID{Hash: blk.Hash(), PartsHeader: blk.MakePartSet(testPartSize).Header()}
 	newState, err := blockExec.ApplyBlock(st, blkID, blk)
@@ -691,7 +691,7 @@ func applyBlock(stateDB dbm.DB, st sm.State, blk *types.Block, proxyApp proxy.Ap
 	return newState
 }
 
-func buildAppStateFromChain(proxyApp proxy.AppConns, stateDB dbm.DB,
+func buildAppStateFromChain(store sm.BlockStore, proxyApp proxy.AppConns, stateDB dbm.DB,
 	state sm.State, chain []*types.Block, nBlocks int, mode uint) {
 	// start a new app without handshake, play nBlocks blocks
 	if err := proxyApp.Start(); err != nil {
@@ -712,24 +712,24 @@ func buildAppStateFromChain(proxyApp proxy.AppConns, stateDB dbm.DB,
 	case 0:
 		for i := 0; i < nBlocks; i++ {
 			block := chain[i]
-			state = applyBlock(stateDB, state, block, proxyApp)
+			state = applyBlock(store, stateDB, state, block, proxyApp)
 		}
 	case 1, 2:
 		for i := 0; i < nBlocks-1; i++ {
 			block := chain[i]
-			state = applyBlock(stateDB, state, block, proxyApp)
+			state = applyBlock(store, stateDB, state, block, proxyApp)
 		}
 
 		if mode == 2 {
 			// update the kvstore height and apphash
 			// as if we ran commit but not
-			state = applyBlock(stateDB, state, chain[nBlocks-1], proxyApp)
+			state = applyBlock(store, stateDB, state, chain[nBlocks-1], proxyApp)
 		}
 	}
 
 }
 
-func buildTMStateFromChain(config *cfg.Config, stateDB dbm.DB, state sm.State, chain []*types.Block, nBlocks int, mode uint) sm.State {
+func buildTMStateFromChain(store sm.BlockStore, config *cfg.Config, stateDB dbm.DB, state sm.State, chain []*types.Block, nBlocks int, mode uint) sm.State {
 	// run the whole chain against this client to build up the tendermint state
 	clientCreator := proxy.NewLocalClientCreator(kvstore.NewPersistentKVStoreApplication(filepath.Join(config.DBDir(), fmt.Sprintf("replay_test_%d_%d_t", nBlocks, mode))))
 	proxyApp := proxy.NewAppConns(clientCreator)
@@ -751,19 +751,19 @@ func buildTMStateFromChain(config *cfg.Config, stateDB dbm.DB, state sm.State, c
 	case 0:
 		// sync right up
 		for _, block := range chain {
-			state = applyBlock(stateDB, state, block, proxyApp)
+			state = applyBlock(store, stateDB, state, block, proxyApp)
 		}
 
 	case 1, 2:
 		// sync up to the penultimate as if we stored the block.
 		// whether we commit or not depends on the appHash
 		for _, block := range chain[:len(chain)-1] {
-			state = applyBlock(stateDB, state, block, proxyApp)
+			state = applyBlock(store, stateDB, state, block, proxyApp)
 		}
 
 		// apply the final block to a state copy so we can
 		// get the right next appHash but keep the state back
-		applyBlock(stateDB, state, chain[len(chain)-1], proxyApp)
+		applyBlock(store, stateDB, state, chain[len(chain)-1], proxyApp)
 	}
 
 	return state
@@ -1029,7 +1029,7 @@ func (bs *mockBlockStore) LoadBlockMeta(height int64) *types.BlockMeta {
 	}
 }
 func (bs *mockBlockStore) LoadBlockPart(height int64, index int) *types.Part { return nil }
-func (bs *mockBlockStore) SaveBlock(block *types.Block, blockParts *types.PartSet, seenCommit *types.Commit) {
+func (bs *mockBlockStore) SaveBlock(block *types.Block, blockParts *types.PartSet, seenCommit *types.Commit, blockCommitLength int64) {
 }
 func (bs *mockBlockStore) LoadBlockCommit(height int64) *types.Commit {
 	return bs.commits[height-1]

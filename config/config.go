@@ -85,6 +85,20 @@ func DefaultConfig() *Config {
 	}
 }
 
+// DefaultFridayConfig returns a default configuration for a Tendermint node
+func DefaultFridayConfig() *Config {
+	return &Config{
+		BaseConfig:      DefaultBaseConfig(),
+		RPC:             DefaultRPCConfig(),
+		P2P:             DefaultP2PConfig(),
+		Mempool:         DefaultMempoolConfig(),
+		FastSync:        DefaultFastSyncConfig(),
+		Consensus:       DefaultFridayConsensusConfig(),
+		TxIndex:         DefaultTxIndexConfig(),
+		Instrumentation: DefaultInstrumentationConfig(),
+	}
+}
+
 // TestConfig returns a configuration that can be used for testing
 func TestConfig() *Config {
 	return &Config{
@@ -94,6 +108,20 @@ func TestConfig() *Config {
 		Mempool:         TestMempoolConfig(),
 		FastSync:        TestFastSyncConfig(),
 		Consensus:       TestConsensusConfig(),
+		TxIndex:         TestTxIndexConfig(),
+		Instrumentation: TestInstrumentationConfig(),
+	}
+}
+
+// TestFridayConfig returns a configuration that can be used for testing
+func TestFridayConfig() *Config {
+	return &Config{
+		BaseConfig:      TestBaseConfig(),
+		RPC:             TestRPCConfig(),
+		P2P:             TestP2PConfig(),
+		Mempool:         TestMempoolConfig(),
+		FastSync:        TestFastSyncConfig(),
+		Consensus:       TestFridayConsensusConfig(),
 		TxIndex:         TestTxIndexConfig(),
 		Instrumentation: TestInstrumentationConfig(),
 	}
@@ -688,6 +716,7 @@ func (cfg *MempoolConfig) ValidateBasic() error {
 	if cfg.MaxTxBytes < 0 {
 		return errors.New("max_tx_bytes can't be negative")
 	}
+
 	return nil
 }
 
@@ -713,14 +742,15 @@ func TestFastSyncConfig() *FastSyncConfig {
 
 // ValidateBasic performs basic validation.
 func (cfg *FastSyncConfig) ValidateBasic() error {
+	var err error
 	switch cfg.Version {
 	case "v0":
-		return nil
 	case "v1":
-		return nil
 	default:
-		return fmt.Errorf("unknown fastsync version %s", cfg.Version)
+		err = fmt.Errorf("unknown fastsync version %s", cfg.Version)
 	}
+
+	return err
 }
 
 //-----------------------------------------------------------------------------
@@ -729,17 +759,21 @@ func (cfg *FastSyncConfig) ValidateBasic() error {
 // ConsensusConfig defines the configuration for the Tendermint consensus service,
 // including timeouts and details about the WAL and the block structure.
 type ConsensusConfig struct {
+	Module string `mapstructure:"module"`
+
 	RootDir string `mapstructure:"home"`
 	WalPath string `mapstructure:"wal_file"`
 	walFile string // overrides WalPath if set
 
-	TimeoutPropose        time.Duration `mapstructure:"timeout_propose"`
-	TimeoutProposeDelta   time.Duration `mapstructure:"timeout_propose_delta"`
-	TimeoutPrevote        time.Duration `mapstructure:"timeout_prevote"`
-	TimeoutPrevoteDelta   time.Duration `mapstructure:"timeout_prevote_delta"`
-	TimeoutPrecommit      time.Duration `mapstructure:"timeout_precommit"`
-	TimeoutPrecommitDelta time.Duration `mapstructure:"timeout_precommit_delta"`
-	TimeoutCommit         time.Duration `mapstructure:"timeout_commit"`
+	TimeoutPropose              time.Duration `mapstructure:"timeout_propose"`
+	TimeoutProposeDelta         time.Duration `mapstructure:"timeout_propose_delta"`
+	TimeoutPrevote              time.Duration `mapstructure:"timeout_prevote"`
+	TimeoutPrevoteDelta         time.Duration `mapstructure:"timeout_prevote_delta"`
+	TimeoutPrecommit            time.Duration `mapstructure:"timeout_precommit"`
+	TimeoutPrecommitDelta       time.Duration `mapstructure:"timeout_precommit_delta"`
+	TimeoutCommit               time.Duration `mapstructure:"timeout_commit"`
+	TimeoutPreviousFailure      time.Duration `mapstructure:"timeout_previous_failure"`
+	TimeoutPreviousFailureDelta time.Duration `mapstructure:"timeout_previous_failure_delta"`
 
 	// Make progress as soon as we have all the precommits (as if TimeoutCommit = 0)
 	SkipTimeoutCommit bool `mapstructure:"skip_timeout_commit"`
@@ -756,6 +790,7 @@ type ConsensusConfig struct {
 // DefaultConsensusConfig returns a default configuration for the consensus service
 func DefaultConsensusConfig() *ConsensusConfig {
 	return &ConsensusConfig{
+		Module:                      "tendermint",
 		WalPath:                     filepath.Join(defaultDataDir, "cs.wal", "wal"),
 		TimeoutPropose:              3000 * time.Millisecond,
 		TimeoutProposeDelta:         500 * time.Millisecond,
@@ -764,12 +799,22 @@ func DefaultConsensusConfig() *ConsensusConfig {
 		TimeoutPrecommit:            1000 * time.Millisecond,
 		TimeoutPrecommitDelta:       500 * time.Millisecond,
 		TimeoutCommit:               1000 * time.Millisecond,
+		TimeoutPreviousFailure:      2000 * time.Millisecond,
+		TimeoutPreviousFailureDelta: 500 * time.Millisecond,
 		SkipTimeoutCommit:           false,
 		CreateEmptyBlocks:           true,
 		CreateEmptyBlocksInterval:   0 * time.Second,
 		PeerGossipSleepDuration:     100 * time.Millisecond,
 		PeerQueryMaj23SleepDuration: 2000 * time.Millisecond,
 	}
+}
+
+// DefaultFridayConsensusConfig returns a specialized friday default configuration for the consensus service
+func DefaultFridayConsensusConfig() *ConsensusConfig {
+	cfg := DefaultConsensusConfig()
+	cfg.Module = "friday"
+	cfg.TimeoutCommit = 800 * time.Millisecond
+	return cfg
 }
 
 // TestConsensusConfig returns a configuration for testing the consensus service
@@ -782,9 +827,18 @@ func TestConsensusConfig() *ConsensusConfig {
 	cfg.TimeoutPrecommit = 10 * time.Millisecond
 	cfg.TimeoutPrecommitDelta = 1 * time.Millisecond
 	cfg.TimeoutCommit = 10 * time.Millisecond
+	cfg.TimeoutPreviousFailure = 20 * time.Millisecond
+	cfg.TimeoutPreviousFailureDelta = 1 * time.Millisecond
 	cfg.SkipTimeoutCommit = true
 	cfg.PeerGossipSleepDuration = 5 * time.Millisecond
 	cfg.PeerQueryMaj23SleepDuration = 250 * time.Millisecond
+	return cfg
+}
+
+// TestFridayConsensusConfig returns a configuration for testing the friday consensus service
+func TestFridayConsensusConfig() *ConsensusConfig {
+	cfg := TestConsensusConfig()
+	cfg.Module = "friday"
 	return cfg
 }
 
@@ -819,6 +873,13 @@ func (cfg *ConsensusConfig) Commit(t time.Time) time.Time {
 	return t.Add(cfg.TimeoutCommit)
 }
 
+// PreviousFailure returns the amount of time to wait for receiving new previous block after failed of previous ulb block
+func (cfg *ConsensusConfig) PreviousFailure(round int) time.Duration {
+	return time.Duration(
+		cfg.TimeoutPreviousFailure.Nanoseconds()+cfg.TimeoutPreviousFailureDelta.Nanoseconds()*int64(round),
+	) * time.Nanosecond
+}
+
 // WalFile returns the full path to the write-ahead log file
 func (cfg *ConsensusConfig) WalFile() string {
 	if cfg.walFile != "" {
@@ -835,6 +896,14 @@ func (cfg *ConsensusConfig) SetWalFile(walFile string) {
 // ValidateBasic performs basic validation (checking param bounds, etc.) and
 // returns an error if any check fails.
 func (cfg *ConsensusConfig) ValidateBasic() error {
+
+	switch cfg.Module {
+	case "tendermint":
+	case "friday":
+	default:
+		return errors.New("invalid consensus module")
+	}
+
 	if cfg.TimeoutPropose < 0 {
 		return errors.New("timeout_propose can't be negative")
 	}

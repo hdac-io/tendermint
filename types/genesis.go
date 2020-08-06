@@ -37,6 +37,7 @@ type GenesisValidator struct {
 type GenesisDoc struct {
 	GenesisTime     time.Time          `json:"genesis_time"`
 	ChainID         string             `json:"chain_id"`
+	ConsensusModule string             `json:"consensus_module"`
 	ConsensusParams *ConsensusParams   `json:"consensus_params,omitempty"`
 	Validators      []GenesisValidator `json:"validators,omitempty"`
 	AppHash         cmn.HexBytes       `json:"app_hash"`
@@ -72,10 +73,23 @@ func (genDoc *GenesisDoc) ValidateAndComplete() error {
 		return errors.Errorf("chain_id in genesis doc is too long (max: %d)", MaxChainIDLen)
 	}
 
-	if genDoc.ConsensusParams == nil {
-		genDoc.ConsensusParams = DefaultConsensusParams()
-	} else if err := genDoc.ConsensusParams.Validate(); err != nil {
-		return err
+	switch genDoc.ConsensusModule {
+	case "friday":
+		if genDoc.ConsensusParams == nil {
+			genDoc.ConsensusParams = DefaultFridayConsensusParams()
+		} else if err := genDoc.ConsensusParams.Validate(); err != nil {
+			return err
+		}
+
+	case "tendermint":
+		if genDoc.ConsensusParams == nil {
+			genDoc.ConsensusParams = DefaultConsensusParams()
+		} else if err := genDoc.ConsensusParams.Validate(); err != nil {
+			return err
+		}
+
+	default:
+		return errors.Errorf("invalid consenssus module %s", genDoc.ConsensusModule)
 	}
 
 	for i, v := range genDoc.Validators {

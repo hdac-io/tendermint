@@ -1,4 +1,4 @@
-package consensus
+package friday
 
 import (
 	"bytes"
@@ -51,7 +51,14 @@ func (cs *ConsensusState) readReplayMessage(msg *TimedWALMessage, newStepSub typ
 	// for logging
 	switch m := msg.Msg.(type) {
 	case types.EventDataRoundState:
+		if m.Height <= cs.state.LastBlockHeight {
+			return nil
+		}
 		cs.Logger.Info("Replay: New Step", "height", m.Height, "round", m.Round, "step", m.Step)
+		if cs.state.LastBlockHeight <= m.Height {
+			cs.updateHeight(m.Height)
+		}
+
 		// these are playback checks
 		ticker := time.After(time.Second * 2)
 		if newStepSub != nil {
@@ -74,21 +81,33 @@ func (cs *ConsensusState) readReplayMessage(msg *TimedWALMessage, newStepSub typ
 		}
 		switch msg := m.Msg.(type) {
 		case *ProposalMessage:
+			if msg.Proposal.Height <= cs.state.LastBlockHeight {
+				return nil
+			}
 			p := msg.Proposal
 			cs.Logger.Info("Replay: Proposal", "height", p.Height, "round", p.Round, "header",
 				p.BlockID.PartsHeader, "pol", p.POLRound, "peer", peerID)
 		case *BlockPartMessage:
+			if msg.Height <= cs.state.LastBlockHeight {
+				return nil
+			}
 			cs.Logger.Info("Replay: BlockPart", "height", msg.Height, "round", msg.Round, "peer", peerID)
 		case *VoteMessage:
 			v := msg.Vote
+			if v.Height <= cs.state.LastBlockHeight {
+				return nil
+			}
 			cs.Logger.Info("Replay: Vote", "height", v.Height, "round", v.Round, "type", v.Type,
 				"blockID", v.BlockID, "peer", peerID)
 		}
 
 		cs.handleMsg(m)
 	case timeoutInfo:
+		if m.Height <= cs.state.LastBlockHeight {
+			return nil
+		}
 		cs.Logger.Info("Replay: Timeout", "height", m.Height, "round", m.Round, "step", m.Step, "dur", m.Duration)
-		cs.handleTimeout(m, cs.RoundState)
+		cs.handleTimeout(m)
 	default:
 		return fmt.Errorf("Replay: Unknown TimedWALMessage type: %v", reflect.TypeOf(msg.Msg))
 	}
@@ -98,6 +117,9 @@ func (cs *ConsensusState) readReplayMessage(msg *TimedWALMessage, newStepSub typ
 // Replay only those messages since the last block.  `timeoutRoutine` should
 // run concurrently to read off tickChan.
 func (cs *ConsensusState) catchupReplay(csHeight int64) error {
+	if csHeight <= 1 {
+		return nil
+	}
 
 	// Set replayMode to true so we don't log signing errors.
 	cs.replayMode = true
@@ -109,23 +131,25 @@ func (cs *ConsensusState) catchupReplay(csHeight int64) error {
 	// this check (since we can crash after writing #ENDHEIGHT).
 	//
 	// Ignore data corruption errors since this is a sanity check.
-	gr, found, err := cs.wal.SearchForEndHeight(csHeight, &WALSearchOptions{IgnoreDataCorruptionErrors: true})
-	if err != nil {
-		return err
-	}
-	if gr != nil {
-		if err := gr.Close(); err != nil {
-			return err
+	for progressingHeight := csHeight + cs.state.ConsensusParams.Block.LenULB - 1; progressingHeight >= csHeight; progressingHeight-- {
+		gr, found, err := cs.wal.SearchForEndHeight(progressingHeight, &WALSearchOptions{IgnoreDataCorruptionErrors: true})
+		if err != nil {
+			continue
 		}
-	}
-	if found {
-		return fmt.Errorf("WAL should not contain #ENDHEIGHT %d", csHeight)
+		if gr != nil {
+			if err := gr.Close(); err != nil {
+				return err
+			}
+		}
+		if found {
+			return fmt.Errorf("WAL should not contain #ENDHEIGHT %d", progressingHeight)
+		}
 	}
 
 	// Search for last height marker.
 	//
 	// Ignore data corruption errors in previous heights because we only care about last height
-	gr, found, err = cs.wal.SearchForEndHeight(csHeight-1, &WALSearchOptions{IgnoreDataCorruptionErrors: true})
+	gr, found, err := cs.wal.SearchForEndHeight(csHeight-1, &WALSearchOptions{IgnoreDataCorruptionErrors: true})
 	if err == io.EOF {
 		cs.Logger.Error("Replay: wal.group.Search returned EOF", "#ENDHEIGHT", csHeight-1)
 	} else if err != nil {
@@ -134,12 +158,29 @@ func (cs *ConsensusState) catchupReplay(csHeight int64) error {
 	if !found {
 		return fmt.Errorf("Cannot replay height %d. WAL does not contain #ENDHEIGHT for %d", csHeight, csHeight-1)
 	}
+
+	// Search for starting height marker
+	// In friday consensus, consensus proceeds in parallel, so it should be noted that the progress is from before the last commited height-ulb.
+	//ex: lastCommitedHeight=5, progressable height = 5+ulb == 6~8, starting height = 6-ulb == 3
+	startingHeight := csHeight - cs.state.ConsensusParams.Block.LenULB
+	if startingHeight < 1 {
+		startingHeight = 1
+	}
+	gr, found, err = cs.wal.SearchForEndHeight(startingHeight, &WALSearchOptions{IgnoreDataCorruptionErrors: true})
+	if err == io.EOF {
+		cs.Logger.Error("Replay: wal.group.Search returned EOF", "#ENDHEIGHT", startingHeight)
+	} else if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("Cannot replay height %d. WAL does not contain #ENDHEIGHT for %d", csHeight, startingHeight)
+	}
 	defer gr.Close() // nolint: errcheck
 
 	cs.Logger.Info("Catchup by replaying consensus messages", "height", csHeight)
 
 	var msg *TimedWALMessage
-	dec := WALDecoder{gr}
+	dec := NewWALDecoder(gr)
 
 LOOP:
 	for {
@@ -416,8 +457,11 @@ func (h *Handshaker) replayBlocks(state sm.State, proxyApp proxy.AppConns, appBl
 	//
 	// If mutateState == true, the final block is replayed with h.replayBlock()
 
-	var appHash []byte
+	appHash := make([][]byte, state.ConsensusParams.Block.LenULB)
 	var err error
+
+	lenULB := state.ConsensusParams.Block.LenULB
+
 	finalBlock := storeBlockHeight
 	if mutateState {
 		finalBlock--
@@ -426,11 +470,13 @@ func (h *Handshaker) replayBlocks(state sm.State, proxyApp proxy.AppConns, appBl
 		h.logger.Info("Applying block", "height", i)
 		block := h.store.LoadBlock(i)
 		// Extra check to ensure the app was not changed in a way it shouldn't have.
-		if len(appHash) > 0 {
-			assertAppHashEqualsOneFromBlock(appHash, block)
+		if len(appHash[0]) > 0 {
+			assertAppHashEqualsOneFromBlock(appHash[0], block)
 		}
 
-		appHash, err = sm.ExecCommitBlock(proxyApp.Consensus(), block, h.logger, h.stateDB, 1)
+		appHash = appHash[1:]
+		execedAppHash, err := sm.ExecCommitBlock(proxyApp.Consensus(), block, h.logger, h.stateDB, lenULB)
+		appHash = append(appHash, execedAppHash)
 		if err != nil {
 			return nil, err
 		}
@@ -444,11 +490,12 @@ func (h *Handshaker) replayBlocks(state sm.State, proxyApp proxy.AppConns, appBl
 		if err != nil {
 			return nil, err
 		}
-		appHash = state.AppHash
+		// TODO: check update ulb length from consensusParams
+		appHash[lenULB-1] = state.AppHash
 	}
 
-	assertAppHashEqualsOneFromState(appHash, state)
-	return appHash, nil
+	assertAppHashEqualsOneFromState(appHash[lenULB-1], state)
+	return appHash[lenULB-1], nil
 }
 
 // ApplyBlock on the proxyApp with the last block.

@@ -92,7 +92,7 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 		)
 	}
 
-	config := cfg.DefaultConfig()
+	config := cfg.DefaultFridayConfig()
 
 	// overwrite default config if set and valid
 	if configFile != "" {
@@ -160,11 +160,21 @@ func testnetFiles(cmd *cobra.Command, args []string) error {
 	}
 
 	// Generate genesis doc from generated validators
+	var consensusParams *types.ConsensusParams
+	switch config.Consensus.Module {
+	case "friday":
+		consensusParams = types.DefaultFridayConsensusParams()
+	case "tendermint":
+		consensusParams = types.DefaultConsensusParams()
+	default:
+		return fmt.Errorf("invalid consensus module %s", config.Consensus.Module)
+	}
 	genDoc := &types.GenesisDoc{
 		ChainID:         "chain-" + cmn.RandStr(6),
-		ConsensusParams: types.DefaultConsensusParams(),
+		ConsensusParams: consensusParams,
 		GenesisTime:     tmtime.Now(),
 		Validators:      genVals,
+		ConsensusModule: config.Consensus.Module,
 	}
 
 	// Write genesis file.
