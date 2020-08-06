@@ -82,6 +82,9 @@ func (app *localClient) SetOptionAsync(req types.RequestSetOption) *ReqRes {
 }
 
 func (app *localClient) DeliverTxAsync(params types.RequestDeliverTx) *ReqRes {
+	app.mtx.Lock()
+	defer app.mtx.Unlock()
+
 	res := app.Application.DeliverTx(params)
 	return app.callback(
 		types.ToRequestDeliverTx(params),
